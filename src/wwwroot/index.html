@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoCopilot 模型代理</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 侧边栏导航 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                </svg>
+                <h1>AutoCopilot</h1>
+            </div>
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-tab="workbench">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>
+                    </svg>
+                    <span>工作台</span>
+                </button>
+                <button class="nav-item" data-tab="providers">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                    <span>提供商管理</span>
+                </button>
+                <button class="nav-item" data-tab="apikeys">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                    </svg>
+                    <span>访问密钥</span>
+                </button>
+                <button class="nav-item" data-tab="metrics">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>
+                    </svg>
+                    <span>指标监控</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <span class="version">v1.0.0</span>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 工作台 Tab (AutoCopilot) -->
+            <section id="workbench" class="tab-content active">
+                <div class="page-header">
+                    <div>
+                        <h2>工作台</h2>
+                        <p class="page-desc">使用 <code>auto-copilot</code> 作为模型名称，请求将自动路由到当前绑定的真实模型</p>
+                    </div>
+                </div>
+
+                <!-- 连接信息卡片 -->
+                <div class="connection-card">
+                    <h3>
+                        <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
+                        </svg>
+                        连接信息
+                    </h3>
+                    <div class="connection-grid">
+                        <div class="connection-item">
+                            <div class="connection-label">OpenAI 代理地址</div>
+                            <div class="connection-value">
+                                <code id="openaiUrl">http://localhost:5267/v1</code>
+                                <button onclick="copyToClipboard('openaiUrl')" class="btn-icon" title="复制">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="connection-item">
+                            <div class="connection-label">Anthropic 代理地址</div>
+                            <div class="connection-value">
+                                <code id="anthropicUrl">http://localhost:5267/v1</code>
+                                <button onclick="copyToClipboard('anthropicUrl')" class="btn-icon" title="复制">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 模型绑定与切换 -->
+                <div class="model-binding-card">
+                    <div class="model-binding-main">
+                        <div class="model-binding-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                            </svg>
+                        </div>
+                        <div class="model-binding-info">
+                            <div class="model-binding-label">影子模型</div>
+                            <div class="model-binding-name">
+                                <code id="proxyModel">auto-copilot</code>
+                                <button onclick="copyText('auto-copilot')" class="btn-icon" title="复制">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="model-binding-current">
+                                <span class="binding-dot" id="binding-dot"></span>
+                                <span id="conn-binding">未配置</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="model-binding-divider"></div>
+                    <div class="model-binding-control">
+                        <label>切换绑定模型</label>
+                        <div class="fluent-select-wrapper">
+                            <select id="autocopilotModel" onchange="switchAutoCopilotModel()">
+                                <option value="">请先配置提供商</option>
+                            </select>
+                            <svg class="fluent-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        </div>
+                        <span id="autocopilotStatus" class="status-msg"></span>
+                    </div>
+                </div>
+
+                <!-- Copilot BYOK 环境变量 -->
+                <div class="card byok-card">
+                    <h3>
+                        <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                        </svg>
+                        Copilot BYOK 环境变量
+                    </h3>
+                    <p class="byok-desc">配置 GitHub Copilot 使用自定义模型提供商（Bring Your Own Key）。设置 <code>COPILOT_PROVIDER_BASE_URL</code> 即可激活 BYOK 模式，无需 GitHub 认证。</p>
+
+                    <form id="byokForm" onsubmit="event.preventDefault(); saveByokEnv();">
+                        <div class="byok-section-title">连接配置</div>
+                        <div class="byok-form-grid">
+                            <div class="byok-form-group required">
+                                <label for="byok-providerBaseUrl">
+                                    COPILOT_PROVIDER_BASE_URL
+                                    <span class="byok-badge required">必需</span>
+                                </label>
+                                <input type="text" id="byok-providerBaseUrl" name="providerBaseUrl" value="http://localhost:5267/v1" placeholder="https://api.example.com/v1">
+                                <span class="byok-form-hint">API endpoint URL，激活 BYOK 模式</span>
+                            </div>
+                            <div class="byok-form-group">
+                                <label for="byok-providerType">
+                                    COPILOT_PROVIDER_TYPE
+                                    <span class="byok-badge">可选</span>
+                                </label>
+                                <div class="fluent-select-wrapper">
+                                    <select id="byok-providerType" name="providerType">
+                                        <option value="openai" selected>openai</option>
+                                        <option value="azure">azure</option>
+                                        <option value="anthropic">anthropic</option>
+                                    </select>
+                                    <svg class="fluent-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"/>
+                                    </svg>
+                                </div>
+                                <span class="byok-form-hint">openai（默认）/ azure / anthropic</span>
+                            </div>
+                            <div class="byok-form-group">
+                                <label for="byok-providerApiKey">
+                                    COPILOT_PROVIDER_API_KEY
+                                    <span class="byok-badge">可选</span>
+                                </label>
+                                <input type="password" id="byok-providerApiKey" name="providerApiKey" placeholder="sk-...">
+                                <span class="byok-form-hint">API 密钥，本地提供商（如 Ollama）可省略</span>
+                            </div>
+                            <div class="byok-form-group">
+                                <label for="byok-providerBearerToken">
+                                    COPILOT_PROVIDER_BEARER_TOKEN
+                                    <span class="byok-badge">可选</span>
+                                </label>
+                                <input type="password" id="byok-providerBearerToken" name="providerBearerToken" placeholder="Bearer token">
+                                <span class="byok-form-hint">优先级高于 API key</span>
+                            </div>
+                            <div class="byok-form-group">
+                                <label for="byok-providerWireApi">
+                                    COPILOT_PROVIDER_WIRE_API
+                                    <span class="byok-badge">可选</span>
+                                </label>
+                                <div class="fluent-select-wrapper">
+                                    <select id="byok-providerWireApi" name="providerWireApi">
+                                        <option value="completions" selected>completions</option>
+                                        <option value="responses">responses</option>
+                                    </select>
+                                    <svg class="fluent-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"/>
+                                    </svg>
+                                </div>
+                                <span class="byok-form-hint">completions（默认）或 responses，GPT-5 系列用 responses</span>
+                            </div>
+                            <div class="byok-form-group">
+                                <label for="byok-providerAzureApiVersion">
+                                    COPILOT_PROVIDER_AZURE_API_VERSION
+                                    <span class="byok-badge">可选</span>
+                                </label>
+                                <input type="text" id="byok-providerAzureApiVersion" name="providerAzureApiVersion" placeholder="versionless v1">
+                                <span class="byok-form-hint">Azure API 版本，默认 versionless v1</span>
+                            </div>
+                        </div>
+
+                        <div class="byok-section-title">模型配置</div>
+                        <div class="byok-form-grid">
+                            <div class="byok-form-group required">
+                                <label for="byok-model">
+                                    COPILOT_MODEL
+                                    <span class="byok-badge required">推荐</span>
+                                </label>
+                                <input type="text" id="byok-model" name="model" value="auto-copilot" placeholder="auto-copilot">
+                                <span class="byok-form-hint">代理层使用的模型名称，同时作为 MODEL_ID 的默认值</span>
+                            </div>
+                            <div class="byok-form-group">
+                                <label for="byok-providerModelId">
+                                    COPILOT_PROVIDER_MODEL_ID
+                                    <span class="byok-badge">可选</span>
+                                </label>
+                                <input type="text" id="byok-providerModelId" name="providerModelId" placeholder="留空则与 COPILOT_MODEL 相同">
+                                <span class="byok-form-hint">已知模型 ID，用于 token 限制和工具支持。留空自动使用 COPILOT_MODEL 的值</span>
+                            </div>
+                            <div class="byok-form-group">
+                                <label for="byok-providerWireModel">
+                                    COPILOT_PROVIDER_WIRE_MODEL
+                                    <span class="byok-badge">可选</span>
+                                </label>
+                                <input type="text" id="byok-providerWireModel" name="providerWireModel" placeholder="my-deployment">
+                                <span class="byok-form-hint">发送给提供商 API 的模型名称（如 Azure deployment）。默认与 MODEL_ID 相同</span>
+                            </div>
+                            <div class="byok-form-group required">
+                                <label for="byok-providerMaxPromptTokens">
+                                    COPILOT_PROVIDER_MAX_PROMPT_TOKENS
+                                    <span class="byok-badge required">推荐</span>
+                                </label>
+                                <input type="number" id="byok-providerMaxPromptTokens" name="providerMaxPromptTokens" value="128000" placeholder="128000">
+                                <span class="byok-form-hint">最大 prompt tokens。当模型不在 CLI 内置目录时必须设置</span>
+                            </div>
+                            <div class="byok-form-group required">
+                                <label for="byok-providerMaxOutputTokens">
+                                    COPILOT_PROVIDER_MAX_OUTPUT_TOKENS
+                                    <span class="byok-badge required">推荐</span>
+                                </label>
+                                <input type="number" id="byok-providerMaxOutputTokens" name="providerMaxOutputTokens" value="4096" placeholder="4096">
+                                <span class="byok-form-hint">最大输出 tokens。当模型不在 CLI 内置目录时必须设置</span>
+                            </div>
+                        </div>
+
+                        <div class="byok-form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                    <polyline points="17 21 17 13 7 13 7 21"/>
+                                    <polyline points="7 3 7 8 15 8"/>
+                                </svg>
+                                保存配置
+                            </button>
+                            <span id="byokSaveStatus" class="status-msg"></span>
+                        </div>
+                    </form>
+
+                    <div class="byok-section-title">快速示例</div>
+                    <div class="byok-examples">
+                        <div class="byok-example">
+                            <div class="byok-example-label">Ollama（本地，无需 API key）</div>
+                            <pre><code>COPILOT_PROVIDER_BASE_URL=http://localhost:11434/v1 \
+  COPILOT_MODEL=deepseek-coder-v2:16b \
+  copilot</code></pre>
+                            <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="byok-example">
+                            <div class="byok-example-label">自定义 OpenAI 兼容端点</div>
+                            <pre><code>COPILOT_PROVIDER_BASE_URL=https://my-api.example.com/v1 \
+  COPILOT_PROVIDER_API_KEY=sk-... \
+  COPILOT_MODEL=gpt-4 \
+  copilot</code></pre>
+                            <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="byok-example">
+                            <div class="byok-example-label">Azure OpenAI（自定义 wire model）</div>
+                            <pre><code>COPILOT_PROVIDER_TYPE=azure \
+  COPILOT_PROVIDER_BASE_URL=https://my-resource.openai.azure.com \
+  COPILOT_PROVIDER_API_KEY=your-key-here \
+  COPILOT_PROVIDER_MODEL_ID=gpt-4 \
+  COPILOT_PROVIDER_WIRE_MODEL=my-gpt4-deployment \
+  copilot</code></pre>
+                            <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="byok-example">
+                            <div class="byok-example-label">Anthropic</div>
+                            <pre><code>COPILOT_PROVIDER_TYPE=anthropic \
+  COPILOT_PROVIDER_BASE_URL=https://api.anthropic.com \
+  COPILOT_PROVIDER_API_KEY=sk-ant-... \
+  COPILOT_MODEL=claude-sonnet-4-20250514 \
+  copilot</code></pre>
+                            <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 调用示例 -->
+                <div class="card">
+                    <h3>
+                        <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                        </svg>
+                        调用示例
+                    </h3>
+                    <div class="code-tabs">
+                        <button class="code-tab active" data-lang="openai">OpenAI 协议</button>
+                        <button class="code-tab" data-lang="anthropic">Anthropic 协议</button>
+                    </div>
+                    <div class="code-panel" id="code-openai">
+                        <pre><code>curl http://localhost:5267/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "auto-copilot",
+    "messages": [{"role": "user", "content": "你好！"}]
+  }'</code></pre>
+                    </div>
+                    <div class="code-panel" id="code-anthropic" style="display:none;">
+                        <pre><code>curl http://localhost:5267/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "auto-copilot",
+    "messages": [{"role": "user", "content": "你好！"}],
+    "max_tokens": 1024
+  }'</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 提供商管理 Tab -->
+            <section id="providers" class="tab-content">
+                <div class="page-header">
+                    <div>
+                        <h2>提供商管理</h2>
+                        <p class="page-desc">添加和管理您的模型提供商（OpenAI / Anthropic），支持添加多个实例</p>
+                    </div>
+                    <button onclick="showAddProviderDialog()" class="btn btn-primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        添加提供商
+                    </button>
+                </div>
+
+                <!-- OpenAI 兼容提供商 -->
+                <div class="provider-section">
+                    <h3 class="provider-section-title">
+                        <span class="provider-section-icon openai">🟢</span>
+                        OpenAI 兼容
+                    </h3>
+                    <div id="openaiProvidersGrid" class="providers-grid"></div>
+                    <div id="openaiProvidersEmpty" class="empty-state-card" style="display:none;">
+                        <p>暂无 OpenAI 兼容提供商</p>
+                    </div>
+                </div>
+
+                <!-- Anthropic 提供商 -->
+                <div class="provider-section">
+                    <h3 class="provider-section-title">
+                        <span class="provider-section-icon anthropic">🟣</span>
+                        Anthropic
+                    </h3>
+                    <div id="anthropicProvidersGrid" class="providers-grid"></div>
+                    <div id="anthropicProvidersEmpty" class="empty-state-card" style="display:none;">
+                        <p>暂无 Anthropic 提供商</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 访问密钥 Tab -->
+            <section id="apikeys" class="tab-content">
+                <div class="page-header">
+                    <div>
+                        <h2>访问密钥</h2>
+                        <p class="page-desc">管理用于访问代理端点的 API 密钥</p>
+                    </div>
+                    <button onclick="showAddKeyDialog()" class="btn btn-primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        添加密钥
+                    </button>
+                </div>
+
+                <div id="keysList" class="keys-list"></div>
+
+                <div id="keysEmpty" class="empty-state-card" style="display:none;">
+                    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                    </svg>
+                    <h3>暂无访问密钥</h3>
+                    <p>添加密钥后，客户端需携带密钥才能访问代理端点</p>
+                </div>
+            </section>
+
+            <!-- 指标监控 Tab -->
+            <section id="metrics" class="tab-content">
+                <div class="page-header">
+                    <div>
+                        <h2>指标监控</h2>
+                        <p class="page-desc">查看请求指标、Token 消耗和性能数据</p>
+                    </div>
+                    <div class="metrics-actions">
+                        <div class="period-selector">
+                            <button class="period-btn" data-period="1h">1小时</button>
+                            <button class="period-btn active" data-period="24h">24小时</button>
+                            <button class="period-btn" data-period="7d">7天</button>
+                            <button class="period-btn" data-period="30d">30天</button>
+                        </div>
+                        <button onclick="exportCsv()" class="btn btn-secondary">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            导出
+                        </button>
+                        <button onclick="refreshMetrics()" class="btn btn-secondary">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
+                                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                            </svg>
+                            刷新
+                        </button>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">总请求数</div>
+                            <div class="stat-value" id="m-total-requests">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon success">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">成功率</div>
+                            <div class="stat-value" id="m-success-rate">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">输入 Token</div>
+                            <div class="stat-value" id="m-prompt-tokens">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2v16"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">输出 Token</div>
+                            <div class="stat-value" id="m-completion-tokens">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">缓存 Token</div>
+                            <div class="stat-value" id="m-cached-tokens">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">预估费用</div>
+                            <div class="stat-value" id="m-est-cost">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">平均延迟</div>
+                            <div class="stat-value" id="m-avg-latency">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">缓存命中率</div>
+                            <div class="stat-value" id="m-cache-rate">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-row">
+                    <div class="card chart-card">
+                        <h3>模型使用分布</h3>
+                        <canvas id="model-chart"></canvas>
+                    </div>
+                    <div class="card chart-card">
+                        <h3>各模型平均延迟</h3>
+                        <canvas id="latency-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="charts-row">
+                    <div class="card chart-card wide">
+                        <h3>每小时请求量</h3>
+                        <canvas id="hourly-requests-chart"></canvas>
+                    </div>
+                </div>
+                <div class="charts-row">
+                    <div class="card chart-card wide">
+                        <h3>每小时 Token 消耗</h3>
+                        <canvas id="hourly-tokens-chart"></canvas>
+                    </div>
+                </div>
+                <div class="charts-row">
+                    <div class="card chart-card wide">
+                        <h3>每小时平均延迟</h3>
+                        <canvas id="hourly-latency-chart"></canvas>
+                    </div>
+                </div>
+                <div class="charts-row">
+                    <div class="card chart-card wide">
+                        <h3>每小时生成速度 (TPS)</h3>
+                        <canvas id="hourly-tps-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>
+                        <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                        请求日志
+                    </h3>
+                    <div class="log-toolbar">
+                        <div class="fluent-select-wrapper" style="max-width: 220px">
+                            <select id="log-filter" onchange="loadRequestLog(1)">
+                                <option value="">全部模型</option>
+                            </select>
+                        </div>
+                        <button onclick="loadRequestLog(1)" class="btn btn-primary btn-sm">筛选</button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>时间</th>
+                                    <th>请求模型</th>
+                                    <th>实际模型</th>
+                                    <th>提供商</th>
+                                    <th>输入 Token</th>
+                                    <th>输出 Token</th>
+                                    <th>缓存 Token</th>
+                                    <th>首字延迟</th>
+                                    <th>速度 (TPS)</th>
+                                    <th>费用</th>
+                                    <th>状态</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logBody">
+                                <tr><td colspan="11" class="empty-cell">暂无数据</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination" id="logPagination"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/autocopilot.js"></script>
+    <script src="js/metrics.js"></script>
+</body>
+</html>
