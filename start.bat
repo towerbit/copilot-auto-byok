@@ -13,7 +13,7 @@ set DOTNET_EnableDiagnostics=0
 set PROJ=src\CopilotAutoBYOK\copilot-auto-byok.csproj
 set OUT=publish
 
-:: Detect source changes — rebuild if csproj is newer than the published dll
+:: Detect source changes - rebuild if csproj is newer than the published dll
 set NEED_BUILD=0
 if not exist "%OUT%\copilot-auto-byok.dll" (
     set NEED_BUILD=1
@@ -26,7 +26,7 @@ if not exist "%OUT%\copilot-auto-byok.dll" (
 )
 
 if %NEED_BUILD%==1 (
-    echo [publish] Release build -^> %OUT%
+    echo [publish] Release build -> %OUT%
     dotnet publish "%PROJ%" -c Release -o "%OUT%" --self-contained false
 )
 
