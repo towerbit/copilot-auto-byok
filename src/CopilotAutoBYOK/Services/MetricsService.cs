@@ -48,33 +48,42 @@ public class MetricsService : IMetricsService, IHostedService, IDisposable
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                try
-                {
-                    // Wait for item or timeout
-                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    cts.CancelAfter(TimeSpan.FromMilliseconds(500));
+                // Try to read from channel without blocking
+                // Use TryRead first to avoid exceptions entirely
+                bool hasData = false;
 
-                    if (await _metricsChannel.Reader.WaitToReadAsync(cts.Token))
+                // TryRead returns false if channel is empty or completed
+                while (_metricsChannel.Reader.TryRead(out var metrics))
+                {
+                    batch.Add(metrics);
+                    hasData = true;
+                }
+
+                // If no data available, wait briefly before checking again
+                if (!hasData && batch.Count == 0)
+                {
+                    // Wait for data with a timeout, but use a non-exception approach
+                    var delayTask = Task.Delay(500, CancellationToken.None);
+                    var waitTask = _metricsChannel.Reader.WaitToReadAsync(cancellationToken).AsTask();
+
+                    // Wait for either data or timeout
+                    var completedTask = await Task.WhenAny(waitTask, delayTask);
+
+                    if (completedTask == waitTask && waitTask.Result)
                     {
-                        while (_metricsChannel.Reader.TryRead(out var metrics))
+                        // Data is available, read it
+                        while (_metricsChannel.Reader.TryRead(out var newMetrics))
                         {
-                            batch.Add(metrics);
+                            batch.Add(newMetrics);
                         }
                     }
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch
-                {
-                    // Ignore timeout and continue
+                    // If timeout or cancellation, just continue the loop
                 }
 
                 // Flush batch
                 if (batch.Count > 0 && (batch.Count >= 100 || DateTime.UtcNow - lastFlush >= flushInterval))
                 {
-                    await FlushBatchAsync(batch, cancellationToken);
+                    await FlushBatchAsync(batch, CancellationToken.None);
                     batch.Clear();
                     lastFlush = DateTime.UtcNow;
                 }
@@ -98,8 +107,10 @@ public class MetricsService : IMetricsService, IHostedService, IDisposable
 
         try
         {
-            using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
-            using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            // Use CancellationToken.None for flush operations to ensure data is saved
+            // even during shutdown
+            using var context = await _contextFactory.CreateDbContextAsync(CancellationToken.None);
+            using var transaction = await context.Database.BeginTransactionAsync(CancellationToken.None);
 
             foreach (var metrics in batch)
             {
@@ -196,6 +207,7 @@ public class MetricsService : IMetricsService, IHostedService, IDisposable
                 AvgTps = g.Average(r => (double?)r.TokensPerSecond) ?? 0,
                 CacheHits = g.Count(r => r.IsCacheHit)
             })
+            .OrderBy(x => x.Total)
             .FirstOrDefaultAsync();
 
         if (summary == null)
@@ -283,6 +295,7 @@ public class MetricsService : IMetricsService, IHostedService, IDisposable
                 Tokens = g.Sum(r => (long)r.TotalTokens),
                 AvgLatency = g.Average(r => (double?)r.LatencyMs) ?? 0
             })
+            .OrderBy(x => x.Requests)
             .FirstOrDefaultAsync();
 
         return new Dictionary<string, object>
