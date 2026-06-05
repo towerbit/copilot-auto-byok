@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services
+builder.Services.AddMemoryCache();
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddCors(options =>
@@ -27,6 +28,7 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 // Register services
 builder.Services.AddSingleton<IConfigService, ConfigService>();
 builder.Services.AddSingleton<IMetricsService, MetricsService>();
+builder.Services.AddHostedService<MetricsService>();
 builder.Services.AddScoped<IProxyService, ProxyService>();
 
 var app = builder.Build();
@@ -49,6 +51,7 @@ if (File.Exists(configPath))
 }
 
 // Configure HTTP pipeline
+app.UseMiddleware<copilot_auto_byok.Middleware.GlobalExceptionMiddleware>();
 app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles();

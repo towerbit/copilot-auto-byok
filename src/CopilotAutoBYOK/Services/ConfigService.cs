@@ -2,17 +2,32 @@ using System.Security;
 using copilot_auto_byok.Data;
 using copilot_auto_byok.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace copilot_auto_byok.Services;
 
 public class ConfigService : IConfigService
 {
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
+    private readonly IMemoryCache _cache;
+    private readonly ILogger<ConfigService> _logger;
     private readonly object _autoPilotLock = new();
+    private readonly object _cacheLock = new();
 
-    public ConfigService(IDbContextFactory<AppDbContext> contextFactory)
+    // Cache keys
+    private const string CacheApiKeys = "api_keys";
+    private const string CacheProviders = "providers";
+    private const string CacheAutoCopilot = "autocopilot";
+    private const string CacheByokEnv = "byok_env";
+
+    // Cache expiration
+    private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(5);
+
+    public ConfigService(IDbContextFactory<AppDbContext> contextFactory, IMemoryCache cache, ILogger<ConfigService> logger)
     {
         _contextFactory = contextFactory;
+        _cache = cache;
+        _logger = logger;
 
         // Ensure database is created
         using var context = _contextFactory.CreateDbContext();
@@ -29,18 +44,11 @@ public class ConfigService : IConfigService
 
     public AppConfiguration GetConfiguration()
     {
-        using var context = _contextFactory.CreateDbContext();
         return new AppConfiguration
         {
-            Providers = context.Providers.AsNoTracking().Select(p => MapToModel(p)).ToList(),
+            Providers = GetProviders(),
             AutoCopilot = GetAutoCopilotBinding(),
-            ApiKeys = context.ApiKeys.AsNoTracking().Select(k => new ApiKeyConfig
-            {
-                Id = k.Id,
-                Key = k.Key,
-                Name = k.Name,
-                CreatedAt = k.CreatedAt
-            }).ToList(),
+            ApiKeys = GetApiKeys(),
             ByokEnv = GetByokEnv()
         };
     }
@@ -52,15 +60,31 @@ public class ConfigService : IConfigService
 
     public List<ProviderConfig> GetProviders()
     {
-        using var context = _contextFactory.CreateDbContext();
-        return context.Providers.AsNoTracking().Select(p => MapToModel(p)).ToList();
+        if (_cache.TryGetValue(CacheProviders, out List<ProviderConfig>? cached))
+            return cached ?? new();
+
+        lock (_cacheLock)
+        {
+            if (_cache.TryGetValue(CacheProviders, out cached))
+                return cached ?? new();
+
+            using var context = _contextFactory.CreateDbContext();
+            var providers = context.Providers.AsNoTracking().Select(p => MapToModel(p)).ToList();
+
+            _cache.Set(CacheProviders, providers, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = CacheExpiration,
+                Size = 1
+            });
+
+            return providers;
+        }
     }
 
     public ProviderConfig? GetProvider(string id)
     {
-        using var context = _contextFactory.CreateDbContext();
-        var entity = context.Providers.AsNoTracking().FirstOrDefault(p => p.Id == id);
-        return entity == null ? null : MapToModel(entity);
+        var providers = GetProviders();
+        return providers.FirstOrDefault(p => p.Id == id);
     }
 
     public void AddProvider(ProviderConfig provider)
@@ -73,6 +97,8 @@ public class ConfigService : IConfigService
 
         context.Providers.Add(MapToEntity(provider));
         context.SaveChanges();
+
+        _cache.Remove(CacheProviders);
     }
 
     public void UpdateProvider(ProviderConfig provider)
@@ -89,6 +115,8 @@ public class ConfigService : IConfigService
         entity.SetVisibleModels(provider.VisibleModels);
         entity.Description = provider.Description;
         context.SaveChanges();
+
+        _cache.Remove(CacheProviders);
     }
 
     public void DeleteProvider(string id)
@@ -98,42 +126,72 @@ public class ConfigService : IConfigService
         if (entity == null) return;
         context.Providers.Remove(entity);
         context.SaveChanges();
+
+        _cache.Remove(CacheProviders);
     }
 
     public AutoCopilotBinding GetAutoCopilotBinding()
     {
-        using var context = _contextFactory.CreateDbContext();
-        var entity = context.AutoCopilot.OrderBy(e => e.Id).FirstOrDefault();
-        if (entity != null)
-        {
-            return new AutoCopilotBinding
-            {
-                CurrentModel = entity.CurrentModel,
-                CurrentProviderId = entity.CurrentProviderId
-            };
-        }
+        if (_cache.TryGetValue(CacheAutoCopilot, out AutoCopilotBinding? cached))
+            return cached!;
 
-        // Entity not yet seeded — create it (under lock to avoid duplicate rows)
-        lock (_autoPilotLock)
+        lock (_cacheLock)
         {
-            entity = context.AutoCopilot.OrderBy(e => e.Id).FirstOrDefault();
+            if (_cache.TryGetValue(CacheAutoCopilot, out cached))
+                return cached!;
+
+            using var context = _contextFactory.CreateDbContext();
+            var entity = context.AutoCopilot.OrderBy(e => e.Id).FirstOrDefault();
             if (entity != null)
             {
-                return new AutoCopilotBinding
+                var binding = new AutoCopilotBinding
                 {
                     CurrentModel = entity.CurrentModel,
                     CurrentProviderId = entity.CurrentProviderId
                 };
+                _cache.Set(CacheAutoCopilot, binding, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = CacheExpiration,
+                    Size = 1
+                });
+                return binding;
             }
 
-            entity = new AutoCopilotBindingEntity();
-            context.AutoCopilot.Add(entity);
-            context.SaveChanges();
-            return new AutoCopilotBinding
+            // Entity not yet seeded — create it (under lock to avoid duplicate rows)
+            lock (_autoPilotLock)
             {
-                CurrentModel = entity.CurrentModel,
-                CurrentProviderId = entity.CurrentProviderId
-            };
+                entity = context.AutoCopilot.OrderBy(e => e.Id).FirstOrDefault();
+                if (entity != null)
+                {
+                    var binding = new AutoCopilotBinding
+                    {
+                        CurrentModel = entity.CurrentModel,
+                        CurrentProviderId = entity.CurrentProviderId
+                    };
+                    _cache.Set(CacheAutoCopilot, binding, new MemoryCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow = CacheExpiration,
+                        Size = 1
+                    });
+                    return binding;
+                }
+
+                entity = new AutoCopilotBindingEntity();
+                context.AutoCopilot.Add(entity);
+                context.SaveChanges();
+
+                var newBinding = new AutoCopilotBinding
+                {
+                    CurrentModel = entity.CurrentModel,
+                    CurrentProviderId = entity.CurrentProviderId
+                };
+                _cache.Set(CacheAutoCopilot, newBinding, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = CacheExpiration,
+                    Size = 1
+                });
+                return newBinding;
+            }
         }
     }
 
@@ -149,18 +207,37 @@ public class ConfigService : IConfigService
         entity.CurrentModel = binding.CurrentModel;
         entity.CurrentProviderId = binding.CurrentProviderId;
         context.SaveChanges();
+
+        _cache.Remove(CacheAutoCopilot);
     }
 
     public List<ApiKeyConfig> GetApiKeys()
     {
-        using var context = _contextFactory.CreateDbContext();
-        return context.ApiKeys.AsNoTracking().Select(k => new ApiKeyConfig
+        if (_cache.TryGetValue(CacheApiKeys, out List<ApiKeyConfig>? cached))
+            return cached ?? new();
+
+        lock (_cacheLock)
         {
-            Id = k.Id,
-            Key = k.Key,
-            Name = k.Name,
-            CreatedAt = k.CreatedAt
-        }).ToList();
+            if (_cache.TryGetValue(CacheApiKeys, out cached))
+                return cached ?? new();
+
+            using var context = _contextFactory.CreateDbContext();
+            var keys = context.ApiKeys.AsNoTracking().Select(k => new ApiKeyConfig
+            {
+                Id = k.Id,
+                Key = k.Key,
+                Name = k.Name,
+                CreatedAt = k.CreatedAt
+            }).ToList();
+
+            _cache.Set(CacheApiKeys, keys, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = CacheExpiration,
+                Size = 1
+            });
+
+            return keys;
+        }
     }
 
     public void AddApiKey(ApiKeyConfig key)
@@ -174,6 +251,9 @@ public class ConfigService : IConfigService
             CreatedAt = key.CreatedAt
         });
         context.SaveChanges();
+
+        _cache.Remove(CacheApiKeys);
+        _cache.Remove("valid_api_keys"); // Clear AuthMiddleware cache
     }
 
     public void RemoveApiKey(string id)
@@ -183,13 +263,33 @@ public class ConfigService : IConfigService
         if (entity == null) return;
         context.ApiKeys.Remove(entity);
         context.SaveChanges();
+
+        _cache.Remove(CacheApiKeys);
+        _cache.Remove("valid_api_keys"); // Clear AuthMiddleware cache
     }
 
     public ByokEnvConfig GetByokEnv()
     {
-        using var context = _contextFactory.CreateDbContext();
-        var entity = context.ByokEnv.OrderBy(e => e.Id).FirstOrDefault();
-        return entity == null ? new ByokEnvConfig() : MapToModel(entity);
+        if (_cache.TryGetValue(CacheByokEnv, out ByokEnvConfig? cached))
+            return cached!;
+
+        lock (_cacheLock)
+        {
+            if (_cache.TryGetValue(CacheByokEnv, out cached))
+                return cached!;
+
+            using var context = _contextFactory.CreateDbContext();
+            var entity = context.ByokEnv.OrderBy(e => e.Id).FirstOrDefault();
+            var config = entity == null ? new ByokEnvConfig() : MapToModel(entity);
+
+            _cache.Set(CacheByokEnv, config, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = CacheExpiration,
+                Size = 1
+            });
+
+            return config;
+        }
     }
 
     public void UpdateByokEnv(ByokEnvConfig config)
@@ -213,6 +313,8 @@ public class ConfigService : IConfigService
         entity.ProviderMaxPromptTokens = config.ProviderMaxPromptTokens;
         entity.ProviderMaxOutputTokens = config.ProviderMaxOutputTokens;
         context.SaveChanges();
+
+        _cache.Remove(CacheByokEnv);
 
         // Fire-and-forget: setting user env vars touches the Windows registry
         // and can block the request thread, so run it in the background.

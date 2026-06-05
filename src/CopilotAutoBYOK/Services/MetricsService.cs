@@ -1,45 +1,141 @@
 using System.Text;
+using System.Threading.Channels;
 using copilot_auto_byok.Data;
 using copilot_auto_byok.Models.Metrics;
 using Microsoft.EntityFrameworkCore;
 
 namespace copilot_auto_byok.Services;
 
-public class MetricsService : IMetricsService
+public class MetricsService : IMetricsService, IHostedService, IDisposable
 {
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
+    private readonly ILogger<MetricsService> _logger;
+    private readonly Channel<RequestMetrics> _metricsChannel;
+    private readonly Task _processingTask;
+    private readonly CancellationTokenSource _shutdownCts;
+    private bool _disposed;
 
-    public MetricsService(IDbContextFactory<AppDbContext> contextFactory)
+    public MetricsService(IDbContextFactory<AppDbContext> contextFactory, ILogger<MetricsService> logger)
     {
         _contextFactory = contextFactory;
+        _logger = logger;
+
+        // Create bounded channel for metrics buffering (max 10000 items)
+        _metricsChannel = Channel.CreateBounded<RequestMetrics>(new BoundedChannelOptions(10000)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleReader = true,
+            SingleWriter = false
+        });
+
+        _shutdownCts = new CancellationTokenSource();
+        _processingTask = Task.Run(() => ProcessMetricsAsync(_shutdownCts.Token));
     }
 
     public async Task RecordAsync(RequestMetrics metrics)
     {
-        using var context = await _contextFactory.CreateDbContextAsync();
-        context.RequestMetrics.Add(new RequestMetricsEntity
+        // Non-blocking write to channel
+        await _metricsChannel.Writer.WriteAsync(metrics).ConfigureAwait(false);
+    }
+
+    private async Task ProcessMetricsAsync(CancellationToken cancellationToken)
+    {
+        var batch = new List<RequestMetrics>();
+        var flushInterval = TimeSpan.FromSeconds(5);
+        var lastFlush = DateTime.UtcNow;
+
+        try
         {
-            Timestamp = metrics.Timestamp,
-            RequestedModel = metrics.RequestedModel,
-            ActualModel = metrics.ActualModel,
-            Provider = metrics.Provider,
-            ProviderId = metrics.ProviderId,
-            Protocol = metrics.Protocol,
-            IsStreaming = metrics.IsStreaming,
-            PromptTokens = metrics.PromptTokens,
-            CompletionTokens = metrics.CompletionTokens,
-            TotalTokens = metrics.TotalTokens,
-            CachedTokens = metrics.CachedTokens,
-            LatencyMs = metrics.LatencyMs,
-            TotalDurationMs = metrics.TotalDurationMs,
-            TokensPerSecond = metrics.TokensPerSecond,
-            IsCacheHit = metrics.IsCacheHit,
-            StatusCode = metrics.StatusCode,
-            IsSuccess = metrics.IsSuccess,
-            Error = metrics.Error,
-            EstimatedCost = metrics.EstimatedCost
-        });
-        await context.SaveChangesAsync();
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    // Wait for item or timeout
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    cts.CancelAfter(TimeSpan.FromMilliseconds(500));
+
+                    if (await _metricsChannel.Reader.WaitToReadAsync(cts.Token))
+                    {
+                        while (_metricsChannel.Reader.TryRead(out var metrics))
+                        {
+                            batch.Add(metrics);
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch
+                {
+                    // Ignore timeout and continue
+                }
+
+                // Flush batch
+                if (batch.Count > 0 && (batch.Count >= 100 || DateTime.UtcNow - lastFlush >= flushInterval))
+                {
+                    await FlushBatchAsync(batch, cancellationToken);
+                    batch.Clear();
+                    lastFlush = DateTime.UtcNow;
+                }
+            }
+
+            // Final flush on shutdown
+            if (batch.Count > 0)
+            {
+                await FlushBatchAsync(batch, CancellationToken.None);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Metrics processing failed");
+        }
+    }
+
+    private async Task FlushBatchAsync(List<RequestMetrics> batch, CancellationToken cancellationToken)
+    {
+        if (batch.Count == 0) return;
+
+        try
+        {
+            using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+            using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+            foreach (var metrics in batch)
+            {
+                context.RequestMetrics.Add(new RequestMetricsEntity
+                {
+                    Timestamp = metrics.Timestamp,
+                    RequestedModel = metrics.RequestedModel,
+                    ActualModel = metrics.ActualModel,
+                    Provider = metrics.Provider,
+                    ProviderId = metrics.ProviderId,
+                    Protocol = metrics.Protocol,
+                    IsStreaming = metrics.IsStreaming,
+                    PromptTokens = metrics.PromptTokens,
+                    CompletionTokens = metrics.CompletionTokens,
+                    TotalTokens = metrics.TotalTokens,
+                    CachedTokens = metrics.CachedTokens,
+                    LatencyMs = metrics.LatencyMs,
+                    TotalDurationMs = metrics.TotalDurationMs,
+                    TokensPerSecond = metrics.TokensPerSecond,
+                    IsCacheHit = metrics.IsCacheHit,
+                    StatusCode = metrics.StatusCode,
+                    IsSuccess = metrics.IsSuccess,
+                    Error = metrics.Error,
+                    EstimatedCost = metrics.EstimatedCost
+                });
+            }
+
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            _logger.LogDebug("Flushed {Count} metrics to database", batch.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to flush {Count} metrics", batch.Count);
+        }
     }
 
     public async Task<List<RequestMetrics>> GetRequestsAsync(int page, int pageSize, string? model, DateTime? from, DateTime? to)
@@ -82,72 +178,80 @@ public class MetricsService : IMetricsService
         using var context = await _contextFactory.CreateDbContextAsync();
         var from = GetPeriodStart(period);
 
-        // Single query — fetch all needed fields, aggregate in memory
-        var all = await context.RequestMetrics
+        // Use database-side aggregation for better performance
+        var summary = await context.RequestMetrics
             .AsNoTracking()
             .Where(r => r.Timestamp >= from)
-            .Select(r => new
+            .GroupBy(_ => 1)
+            .Select(g => new
             {
-                r.IsSuccess,
-                r.PromptTokens,
-                r.CompletionTokens,
-                r.TotalTokens,
-                r.CachedTokens,
-                r.EstimatedCost,
-                r.LatencyMs,
-                r.TokensPerSecond,
-                r.IsCacheHit,
-                r.ActualModel
+                Total = g.Count(),
+                Success = g.Count(r => r.IsSuccess),
+                PromptTokens = g.Sum(r => (long)r.PromptTokens),
+                CompletionTokens = g.Sum(r => (long)r.CompletionTokens),
+                TotalTokens = g.Sum(r => (long)r.TotalTokens),
+                CachedTokens = g.Sum(r => (long)r.CachedTokens),
+                EstimatedCost = g.Sum(r => r.EstimatedCost),
+                AvgLatency = g.Average(r => (double?)r.LatencyMs) ?? 0,
+                AvgTps = g.Average(r => (double?)r.TokensPerSecond) ?? 0,
+                CacheHits = g.Count(r => r.IsCacheHit)
             })
-            .ToListAsync();
+            .FirstOrDefaultAsync();
 
-        var total = all.Count;
-        var success = all.Count(r => r.IsSuccess);
-        var promptTokens = all.Sum(r => (long)r.PromptTokens);
-        var completionTokens = all.Sum(r => (long)r.CompletionTokens);
-        var totalTokens = all.Sum(r => (long)r.TotalTokens);
-        var cachedTokens = all.Sum(r => (long)r.CachedTokens);
-        var estimatedCost = all.Sum(r => r.EstimatedCost);
-        var avgLatency = all.Count > 0 ? all.Average(r => (double)r.LatencyMs) : 0;
-        var avgTps = all.Count > 0 ? all.Average(r => (double)r.TokensPerSecond) : 0;
-        var cacheHits = all.Count(r => r.IsCacheHit);
+        if (summary == null)
+        {
+            return new MetricsSummary
+            {
+                Period = period,
+                TotalRequests = 0,
+                SuccessfulRequests = 0,
+                FailedRequests = 0,
+                SuccessRate = 0,
+                TokenUsage = new TokenUsageSummary(),
+                Performance = new PerformanceSummary(),
+                ModelBreakdown = new List<ModelBreakdown>()
+            };
+        }
 
-        var summary = new MetricsSummary
+        var result = new MetricsSummary
         {
             Period = period,
-            TotalRequests = total,
-            SuccessfulRequests = success,
-            FailedRequests = total - success,
-            SuccessRate = total > 0 ? Math.Round((double)success / total * 100, 2) : 0,
+            TotalRequests = summary.Total,
+            SuccessfulRequests = summary.Success,
+            FailedRequests = summary.Total - summary.Success,
+            SuccessRate = summary.Total > 0 ? Math.Round((double)summary.Success / summary.Total * 100, 2) : 0,
             TokenUsage = new TokenUsageSummary
             {
-                PromptTokens = promptTokens,
-                CompletionTokens = completionTokens,
-                TotalTokens = totalTokens,
-                CachedTokens = cachedTokens,
-                EstimatedCost = estimatedCost
+                PromptTokens = summary.PromptTokens,
+                CompletionTokens = summary.CompletionTokens,
+                TotalTokens = summary.TotalTokens,
+                CachedTokens = summary.CachedTokens,
+                EstimatedCost = summary.EstimatedCost
             },
             Performance = new PerformanceSummary
             {
-                AvgLatencyMs = Math.Round(avgLatency, 2),
-                AvgTokensPerSecond = Math.Round(avgTps, 2),
-                CacheHitRate = total > 0 ? Math.Round((double)cacheHits / total * 100, 2) : 0
+                AvgLatencyMs = Math.Round(summary.AvgLatency, 2),
+                AvgTokensPerSecond = Math.Round(summary.AvgTps, 2),
+                CacheHitRate = summary.Total > 0 ? Math.Round((double)summary.CacheHits / summary.Total * 100, 2) : 0
             }
         };
 
-        // Percentiles (computed from already-loaded data)
-        var latencies = all
-            .Where(r => r.LatencyMs > 0)
+        // Percentiles - still need to load data but only latencies
+        var latencies = await context.RequestMetrics
+            .AsNoTracking()
+            .Where(r => r.Timestamp >= from && r.LatencyMs > 0)
             .Select(r => (double)r.LatencyMs)
             .OrderBy(l => l)
-            .ToList();
+            .ToListAsync();
 
-        summary.Performance.P50LatencyMs = GetPercentile(latencies, 0.5);
-        summary.Performance.P95LatencyMs = GetPercentile(latencies, 0.95);
-        summary.Performance.P99LatencyMs = GetPercentile(latencies, 0.99);
+        result.Performance.P50LatencyMs = GetPercentile(latencies, 0.5);
+        result.Performance.P95LatencyMs = GetPercentile(latencies, 0.95);
+        result.Performance.P99LatencyMs = GetPercentile(latencies, 0.99);
 
-        // Model breakdown (computed from already-loaded data)
-        summary.ModelBreakdown = all
+        // Model breakdown - use database-side grouping
+        result.ModelBreakdown = await context.RequestMetrics
+            .AsNoTracking()
+            .Where(r => r.Timestamp >= from)
             .GroupBy(r => r.ActualModel)
             .Select(g => new ModelBreakdown
             {
@@ -158,9 +262,9 @@ public class MetricsService : IMetricsService
                 EstimatedCost = g.Sum(r => r.EstimatedCost)
             })
             .OrderByDescending(m => m.Requests)
-            .ToList();
+            .ToListAsync();
 
-        return summary;
+        return result;
     }
 
     public async Task<Dictionary<string, object>> GetRealtimeStatsAsync()
@@ -168,21 +272,24 @@ public class MetricsService : IMetricsService
         using var context = await _contextFactory.CreateDbContextAsync();
         var oneHourAgo = DateTime.UtcNow.AddHours(-1);
 
-        var all = await context.RequestMetrics
+        // Use database-side aggregation
+        var stats = await context.RequestMetrics
             .AsNoTracking()
             .Where(r => r.Timestamp >= oneHourAgo)
-            .Select(r => new { r.TotalTokens, r.LatencyMs })
-            .ToListAsync();
-
-        var requests = all.Count;
-        var tokens = all.Sum(r => (long)r.TotalTokens);
-        var avgLatency = all.Count > 0 ? all.Average(r => (double)r.LatencyMs) : 0;
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Requests = g.Count(),
+                Tokens = g.Sum(r => (long)r.TotalTokens),
+                AvgLatency = g.Average(r => (double?)r.LatencyMs) ?? 0
+            })
+            .FirstOrDefaultAsync();
 
         return new Dictionary<string, object>
         {
-            ["requestsLastHour"] = requests,
-            ["tokensLastHour"] = tokens,
-            ["avgLatencyLastHour"] = Math.Round(avgLatency, 2),
+            ["requestsLastHour"] = stats?.Requests ?? 0,
+            ["tokensLastHour"] = stats?.Tokens ?? 0,
+            ["avgLatencyLastHour"] = Math.Round(stats?.AvgLatency ?? 0, 2),
             ["timestamp"] = DateTime.UtcNow.ToString("O")
         };
     }
@@ -364,4 +471,49 @@ public class MetricsService : IMetricsService
         Error = e.Error,
         EstimatedCost = e.EstimatedCost
     };
+
+    // IHostedService implementation
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("MetricsService started with async batch processing");
+        return Task.CompletedTask;
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("MetricsService stopping...");
+
+        _shutdownCts.Cancel();
+        _metricsChannel.Writer.Complete();
+
+        try
+        {
+            await _processingTask.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+        }
+        catch
+        {
+            _logger.LogWarning("MetricsService shutdown timeout, forcing stop");
+        }
+
+        _logger.LogInformation("MetricsService stopped");
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        try
+        {
+            _shutdownCts.Cancel();
+            _metricsChannel.Writer.TryComplete();
+            _processingTask.Wait(TimeSpan.FromSeconds(5));
+        }
+        catch
+        {
+            // Ignore disposal errors
+        }
+
+        _shutdownCts.Dispose();
+    }
 }

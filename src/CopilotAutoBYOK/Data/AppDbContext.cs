@@ -77,8 +77,13 @@ public class AppDbContext : DbContext
             entity.Property(e => e.IsSuccess).HasColumnName("is_success");
             entity.Property(e => e.EstimatedCost).HasColumnName("estimated_cost");
             entity.Property(e => e.Error).HasMaxLength(1000);
+
+            // Optimized indexes for common query patterns
             entity.HasIndex(e => e.Timestamp).HasDatabaseName("idx_timestamp");
             entity.HasIndex(e => e.ActualModel).HasDatabaseName("idx_actual_model");
+            entity.HasIndex(e => new { e.Timestamp, e.ActualModel }).HasDatabaseName("idx_timestamp_model");
+            entity.HasIndex(e => new { e.Timestamp, e.IsSuccess }).HasDatabaseName("idx_timestamp_success");
+            entity.HasIndex(e => new { e.ActualModel, e.Timestamp }).HasDatabaseName("idx_model_timestamp");
         });
     }
 }

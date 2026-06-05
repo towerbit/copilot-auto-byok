@@ -1,4 +1,5 @@
 using copilot_auto_byok.Services;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace copilot_auto_byok.Middleware;
 
@@ -6,11 +7,15 @@ public class AuthMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<AuthMiddleware> _logger;
+    private readonly IMemoryCache _cache;
+    private const string CacheKey = "valid_api_keys";
+    private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(2);
 
-    public AuthMiddleware(RequestDelegate next, ILogger<AuthMiddleware> logger)
+    public AuthMiddleware(RequestDelegate next, ILogger<AuthMiddleware> logger, IMemoryCache cache)
     {
         _next = next;
         _logger = logger;
+        _cache = cache;
     }
 
     public async Task InvokeAsync(HttpContext context, IConfigService configService)
@@ -28,7 +33,7 @@ public class AuthMiddleware
             return;
         }
 
-        var apiKeys = configService.GetApiKeys();
+        var apiKeys = GetCachedApiKeys(configService);
         if (apiKeys.Count == 0)
         {
             // No keys configured — setup mode, allow all
@@ -46,7 +51,7 @@ public class AuthMiddleware
         }
 
         var providedKey = authHeader["Bearer ".Length..].Trim();
-        var isValid = apiKeys.Any(k => k.Key == providedKey);
+        var isValid = apiKeys.Contains(providedKey);
 
         if (!isValid)
         {
@@ -58,5 +63,22 @@ public class AuthMiddleware
         }
 
         await _next(context);
+    }
+
+    private HashSet<string> GetCachedApiKeys(IConfigService configService)
+    {
+        if (_cache.TryGetValue(CacheKey, out HashSet<string>? cached))
+            return cached ?? new();
+
+        var keys = configService.GetApiKeys();
+        var keySet = new HashSet<string>(keys.Select(k => k.Key));
+
+        _cache.Set(CacheKey, keySet, new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = CacheExpiration,
+            Size = 1
+        });
+
+        return keySet;
     }
 }
