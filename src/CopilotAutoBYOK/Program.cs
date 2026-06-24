@@ -30,6 +30,11 @@ builder.Services.AddSingleton<IConfigService, ConfigService>();
 builder.Services.AddSingleton<IMetricsService, MetricsService>();
 builder.Services.AddHostedService<MetricsService>();
 builder.Services.AddScoped<IProxyService, ProxyService>();
+// 监听0.0.0.0
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(15959); // Listen on port 15959
+});
 
 var app = builder.Build();
 
