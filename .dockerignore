@@ -1,0 +1,16 @@
+**/.git
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/node_modules
+**/publish
+**/*.user
+**/*.suo
+**/.idea
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose*.yml
+*.md
+docs/
