@@ -8,7 +8,7 @@ OUT="publish"
 
 # 最小化运行时占用
 export ASPNETCORE_ENVIRONMENT=Production
-export ASPNETCORE_URLS="http://localhost:5000"
+export ASPNETCORE_URLS="http://localhost:15959"
 export Logging__LogLevel__Default=Warning
 export Logging__LogLevel__Microsoft=Warning
 export Logging__LogLevel__Microsoft.AspNetCore=Warning
@@ -21,5 +21,5 @@ if [ ! -f "$OUT/copilot-auto-byok.dll" ] || [ "$PROJ" -nt "$OUT/copilot-auto-byo
         || dotnet publish "$PROJ" -c Release -o "$OUT" --self-contained false
 fi
 
-echo "[start] http://localhost:5000 (minimal)"
+echo "[start] http://localhost:15959 (minimal)"
 exec dotnet "$OUT/copilot-auto-byok.dll"

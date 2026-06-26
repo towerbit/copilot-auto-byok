@@ -4,7 +4,7 @@ setlocal
 cd /d "%~dp0"
 
 set ASPNETCORE_ENVIRONMENT=Production
-set ASPNETCORE_URLS=http://localhost:5000
+set ASPNETCORE_URLS=http://localhost:15959
 set Logging__LogLevel__Default=Warning
 set Logging__LogLevel__Microsoft=Warning
 set Logging__LogLevel__Microsoft.AspNetCore=Warning
@@ -33,6 +33,6 @@ if %NEED_BUILD%==1 (
     dotnet publish "%PROJ%" -c Release -o "%OUT%" --self-contained false
 )
 
-echo [start] http://localhost:5000 (minimal)
+echo [start] http://localhost:15959 (minimal)
 cd /d "%OUT%"
 dotnet "copilot-auto-byok.dll"

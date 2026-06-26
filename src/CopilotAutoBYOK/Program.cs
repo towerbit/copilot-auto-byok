@@ -21,7 +21,9 @@ builder.Services.AddCors(options =>
 });
 
 // Register EF Core
-var dbPath = Path.Combine(builder.Environment.ContentRootPath, "Data", "app.db");
+var parentDir = Directory.GetParent(builder.Environment.ContentRootPath)?.FullName
+                ?? builder.Environment.ContentRootPath;
+var dbPath = Path.Combine(parentDir, "Data", "app.db");
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 
@@ -39,7 +41,7 @@ builder.WebHost.ConfigureKestrel(options =>
 var app = builder.Build();
 
 // Ensure Data directory exists
-var dataDir = Path.Combine(builder.Environment.ContentRootPath, "Data");
+var dataDir = Path.Combine(parentDir, "Data");
 if (!Directory.Exists(dataDir))
 {
     Directory.CreateDirectory(dataDir);
