@@ -322,7 +322,7 @@ public class ProxyService : IProxyService
             var forwardRequest = await BuildForwardRequestAsync(request, pathAndQuery, bodyText, provider, targetModel, targetProviderType);
 
             // Send request
-            var client = _httpClientFactory.CreateClient();
+            var client = _httpClientFactory.CreateClient("ProxyClient");
             var response = await client.SendAsync(forwardRequest, HttpCompletionOption.ResponseHeadersRead);
             metrics.LatencyMs = stopwatch.ElapsedMilliseconds;
             metrics.StatusCode = (int)response.StatusCode;

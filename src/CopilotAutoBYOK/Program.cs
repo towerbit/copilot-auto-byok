@@ -3,13 +3,25 @@ using copilot_auto_byok.Middleware;
 using copilot_auto_byok.Models;
 using copilot_auto_byok.Services;
 using Microsoft.EntityFrameworkCore;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services
 builder.Services.AddMemoryCache();
 builder.Services.AddControllers();
-builder.Services.AddHttpClient();
+// Configure the proxy HttpClient with automatic decompression so upstream
+// gzip/deflate/brotli responses are transparently decoded. Without this the
+// proxy would forward compressed bytes as if they were plaintext and the
+// upstream Content-Encoding header (a content header) would never be passed
+// through to the client, corrupting both streaming and non-streaming responses.
+builder.Services.AddHttpClient("ProxyClient")
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AutomaticDecompression = DecompressionMethods.GZip |
+                                 DecompressionMethods.Deflate |
+                                 DecompressionMethods.Brotli
+    });
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -21,9 +33,13 @@ builder.Services.AddCors(options =>
 });
 
 // Register EF Core
-var parentDir = Directory.GetParent(builder.Environment.ContentRootPath)?.FullName
-                ?? builder.Environment.ContentRootPath;
-var dbPath = Path.Combine(parentDir, "Data", "app.db");
+//var parentDir = Directory.GetParent(builder.Environment.ContentRootPath)?.FullName
+//                ?? builder.Environment.ContentRootPath;
+//var dbPath = Path.Combine(parentDir, "Data", "app.db");
+// 数据库存放位置，恢复到 /app/Data/app.db
+var currentDir = Directory.GetCurrentDirectory();
+var dataDir = Path.Combine(currentDir, "Data");
+var dbPath = Path.Combine(dataDir, "app.db");
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 
@@ -41,7 +57,7 @@ builder.WebHost.ConfigureKestrel(options =>
 var app = builder.Build();
 
 // Ensure Data directory exists
-var dataDir = Path.Combine(parentDir, "Data");
+//var dataDir = Path.Combine(parentDir, "Data");
 if (!Directory.Exists(dataDir))
 {
     Directory.CreateDirectory(dataDir);
