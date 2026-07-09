@@ -44,7 +44,7 @@
                 </button>
             </nav>
             <div class="sidebar-footer">
-                <span class="version">v1.0.0</span>
+                <span class="version" id="app-version">v1.0.0</span>
             </div>
         </aside>
 
@@ -628,5 +628,17 @@
     <script src="js/config.js"></script>
     <script src="js/autocopilot.js"></script>
     <script src="js/metrics.js"></script>
+    <script>
+        // 左下角版本号取自 csproj 的 <Version>，避免硬编码
+        fetch('/api/version')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d && d.version) {
+                    var el = document.getElementById('app-version');
+                    if (el) el.textContent = 'v' + d.version;
+                }
+            })
+            .catch(function () { /* 失败则保留默认版本号 */ });
+    </script>
 </body>
 </html>

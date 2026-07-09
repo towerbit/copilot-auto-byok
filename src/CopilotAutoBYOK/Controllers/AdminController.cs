@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using copilot_auto_byok.Services;
 using copilot_auto_byok.Models;
+using System.Reflection;
 
 namespace copilot_auto_byok.Controllers;
 
@@ -214,5 +215,21 @@ public class AdminController : ControllerBase
     {
         _configService.UpdateByokEnv(config);
         return Ok(new { message = "BYOK environment configuration saved" });
+    }
+
+    [HttpGet("version")]
+    public IActionResult GetVersion()
+    {
+        var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+        var version = assembly
+            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion
+            ?? assembly.GetName().Version?.ToString()
+            ?? "unknown";
+        // 去掉 SDK 追加的提交哈希后缀（如 "+2fb572..."）
+        var plusIndex = version.IndexOf('+');
+        if (plusIndex >= 0)
+            version = version[..plusIndex];
+        return Ok(new { version });
     }
 }
