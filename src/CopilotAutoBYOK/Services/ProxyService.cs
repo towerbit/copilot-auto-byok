@@ -429,6 +429,14 @@ public class ProxyService : IProxyService
                 {
                     var oldModel = jsonObj["model"]?.ToString() ?? "(none)";
                     jsonObj["model"] = model;
+
+                    // Anthropic's Messages API does not allow "system" as a message role.
+                    // Extract system messages into the top-level "system" field before forwarding.
+                    if (providerType == "anthropic")
+                    {
+                        ConvertSystemRoleForAnthropic(jsonObj);
+                    }
+
                     var newBody = jsonObj.ToJsonString();
                     _logger.LogInformation("Body replaced: oldModel={OldModel}, newModel={NewModel}, body={Body}", oldModel, model, newBody);
                     forwardRequest.Content = new StringContent(newBody, System.Text.Encoding.UTF8, "application/json");
@@ -457,6 +465,124 @@ public class ProxyService : IProxyService
         }
 
         return forwardRequest;
+    }
+
+    /// <summary>
+    /// Anthropic's Messages API has no "system" message role; the system prompt must live in the
+    /// top-level "system" field. Claude Code (and other OpenAI-style clients) may emit
+    /// {"role":"system",...} entries inside "messages". This converts them so the upstream
+    /// Anthropic endpoint does not reject the request with a 500.
+    /// </summary>
+    private static void ConvertSystemRoleForAnthropic(System.Text.Json.Nodes.JsonObject jsonObj)
+    {
+        if (jsonObj["messages"] is not System.Text.Json.Nodes.JsonArray messages)
+            return;
+
+        var systemTexts = new List<string>();
+        var preservedSystemBlocks = new List<System.Text.Json.Nodes.JsonNode>();
+
+        // Preserve any existing top-level "system" (string or content blocks array).
+        if (jsonObj["system"] is System.Text.Json.Nodes.JsonNode existingSystem)
+        {
+            if (existingSystem is System.Text.Json.Nodes.JsonValue)
+            {
+                var s = existingSystem.GetValue<string>();
+                if (!string.IsNullOrEmpty(s))
+                    systemTexts.Add(s);
+            }
+            else if (existingSystem is System.Text.Json.Nodes.JsonArray sysArr)
+            {
+                foreach (var block in sysArr)
+                {
+                    if (block is System.Text.Json.Nodes.JsonObject bo && bo["type"]?.GetValue<string>() == "text")
+                    {
+                        var t = bo["text"]?.GetValue<string>();
+                        if (!string.IsNullOrEmpty(t)) systemTexts.Add(t!);
+                    }
+                    else
+                    {
+                        preservedSystemBlocks.Add(block!);
+                    }
+                }
+            }
+        }
+
+        // Filter messages: pull out "system" role entries, keep the rest.
+        var newMessages = new System.Text.Json.Nodes.JsonArray();
+        foreach (var m in messages)
+        {
+            if (m is System.Text.Json.Nodes.JsonObject mo && mo["role"]?.GetValue<string>() == "system")
+            {
+                var text = ExtractTextFromContent(mo["content"]);
+                if (!string.IsNullOrEmpty(text))
+                    systemTexts.Add(text!);
+            }
+            else
+            {
+                newMessages.Add(m!);
+            }
+        }
+
+        jsonObj["messages"] = newMessages;
+
+        if (systemTexts.Count == 0)
+            return;
+
+        if (preservedSystemBlocks.Count > 0)
+        {
+            var arr = new System.Text.Json.Nodes.JsonArray();
+            foreach (var block in preservedSystemBlocks)
+                arr.Add(block);
+            foreach (var t in systemTexts)
+            {
+                var block = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["type"] = "text",
+                    ["text"] = t
+                };
+                arr.Add(block);
+            }
+            jsonObj["system"] = arr;
+        }
+        else
+        {
+            jsonObj["system"] = string.Join("\n\n", systemTexts);
+        }
+    }
+
+    /// <summary>
+    /// Extract plain text from a message "content" node, which may be either a string
+    /// or an array of content blocks (e.g. [{"type":"text","text":"..."}]).
+    /// </summary>
+    private static string? ExtractTextFromContent(System.Text.Json.Nodes.JsonNode? content)
+    {
+        if (content == null)
+            return null;
+
+        if (content is System.Text.Json.Nodes.JsonValue val)
+        {
+            return val.TryGetValue<string>(out var s) ? s : null;
+        }
+
+        if (content is System.Text.Json.Nodes.JsonArray arr)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var item in arr)
+            {
+                if (item is System.Text.Json.Nodes.JsonObject o && o["type"]?.GetValue<string>() == "text")
+                {
+                    var t = o["text"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(t))
+                    {
+                        if (sb.Length > 0) sb.Append('\n');
+                        sb.Append(t);
+                    }
+                }
+            }
+            return sb.Length > 0 ? sb.ToString() : null;
+        }
+
+        return null;
     }
 
     private static bool ShouldForwardHeader(string headerName)
