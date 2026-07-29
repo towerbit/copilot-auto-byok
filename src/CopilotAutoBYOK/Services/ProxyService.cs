@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -241,6 +242,8 @@ internal class MetricsCollectingStream : Stream
 
 public class ProxyService : IProxyService
 {
+    private static readonly ConcurrentDictionary<string, string> ReasoningContentCache = new();
+
     private readonly IConfigService _configService;
     private readonly IMetricsService _metricsService;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -436,6 +439,10 @@ public class ProxyService : IProxyService
                     {
                         ConvertSystemRoleForAnthropic(jsonObj);
                     }
+                    else if (providerType == "openai")
+                    {
+                        NormalizeOpenAICompatibleRequest(jsonObj, provider.Id, model);
+                    }
 
                     var newBody = jsonObj.ToJsonString();
                     _logger.LogInformation("Body replaced: oldModel={OldModel}, newModel={NewModel}, body={Body}", oldModel, model, newBody);
@@ -465,6 +472,36 @@ public class ProxyService : IProxyService
         }
 
         return forwardRequest;
+    }
+
+    private static void NormalizeOpenAICompatibleRequest(System.Text.Json.Nodes.JsonObject jsonObj, string providerId, string model)
+    {
+        if (jsonObj["messages"] is not System.Text.Json.Nodes.JsonArray messages)
+            return;
+
+        var cacheKey = $"{providerId}:{model}";
+        var lastReasoning = ReasoningContentCache.TryGetValue(cacheKey, out var cached) ? cached : "";
+
+        foreach (var message in messages)
+        {
+            if (message is not System.Text.Json.Nodes.JsonObject messageObj)
+                continue;
+
+            var role = messageObj["role"]?.GetValue<string>();
+            if (role != "assistant")
+                continue;
+
+            var reasoningContent = messageObj["reasoning_content"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(reasoningContent))
+            {
+                lastReasoning = reasoningContent;
+                ReasoningContentCache[cacheKey] = reasoningContent;
+            }
+            else if (!string.IsNullOrEmpty(lastReasoning) && messageObj.ContainsKey("tool_calls"))
+            {
+                messageObj["reasoning_content"] = lastReasoning;
+            }
+        }
     }
 
     /// <summary>
