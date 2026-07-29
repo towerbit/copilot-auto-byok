@@ -71,6 +71,8 @@ public class AnthropicController : ControllerBase
             if (!isStreaming)
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
+                // Convert Python-style booleans (True/False) to JSON-style (true/false)
+                responseContent = copilot_auto_byok.Services.BooleanConvertStream.ConvertPythonBooleans(responseContent);
                 await Response.WriteAsync(responseContent);
                 await Response.Body.FlushAsync();
                 return;

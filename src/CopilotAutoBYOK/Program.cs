@@ -4,7 +4,14 @@ using copilot_auto_byok.Models;
 using copilot_auto_byok.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Net;
-
+#if DEBUG
+// Run boolean conversion tests if --test flag is passed
+if (args.Contains("--test"))
+{
+    copilot_auto_byok.TestBooleanConversion.RunTests();
+    return;
+}
+#endif
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services

@@ -1,15 +1,275 @@
+/*
+使用中发现 vs2026 中 copilot 调用 MIMO API 存在大量工具调用失败导致反复尝试的问题
+怀疑 toolcall 缺少 reasoning_content 的问题，尝试在代理层缓存和补填，后来在解决了
+True/False json 解析失败的问题后，感觉不应该人为干预 reasoning_content，故通过停
+用条件编译参数 CACHE_REASONING_CONTENT 的方式，不再缓存和发送 reasoning_content
+*/
+#undef CACHE_REASONING_CONTENT
+using copilot_auto_byok.Models;
+using copilot_auto_byok.Models.Metrics;
+using System.Buffers;
+#if CACHE_REASONING_CONTENT
 using System.Collections.Concurrent;
+#endif
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
-using copilot_auto_byok.Models;
-using copilot_auto_byok.Models.Metrics;
 
 namespace copilot_auto_byok.Services;
 
 public interface IProxyService
 {
     Task<HttpResponseMessage> ForwardAsync(HttpRequestMessage request, string pathAndQuery, string bodyText, string protocol, string requestedModel, bool isStreaming);
+}
+
+/// <summary>
+/// A stream wrapper that converts Python-style booleans (True/False) to JSON-style (true/false).
+/// This is needed because some APIs (like MiMo) return Python-style booleans in JSON responses,
+/// which causes parsing failures in clients expecting standard JSON.
+/// Handles buffer boundary issues where "True"/"False" may be split across reads.
+/// </summary>
+internal class BooleanConvertStream : Stream
+{
+    private readonly Stream _inner;
+    private readonly StringBuilder _buffer = new();
+    private bool _disposed;
+
+    // Potential partial matches at buffer end that need to be held back
+    private static readonly string[] _partialTrue = ["T", "Tr", "Tru"];
+    private static readonly string[] _partialFalse = ["F", "Fa", "Fal", "Fals"];
+
+    public BooleanConvertStream(Stream inner)
+    {
+        _inner = inner;
+    }
+
+    public override bool CanRead => _inner.CanRead;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => _inner.Length;
+    public override long Position { get => _inner.Position; set => throw new NotSupportedException(); }
+    public override void Flush() => _inner.Flush();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        var read = _inner.Read(buffer, offset, count);
+        if (read <= 0) return read;
+
+        var text = Encoding.UTF8.GetString(buffer, offset, read);
+        _buffer.Append(text);
+
+        var (output, remaining) = ExtractCompleteData(_buffer.ToString());
+        _buffer.Clear();
+        _buffer.Append(remaining);
+
+        var bytes = Encoding.UTF8.GetBytes(output);
+        var copyCount = Math.Min(bytes.Length, count);
+        Array.Copy(bytes, 0, buffer, offset, copyCount);
+        return copyCount;
+    }
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        // Rent a temporary array for the inner read
+        var temp = ArrayPool<byte>.Shared.Rent(buffer.Length);
+        try
+        {
+            var read = await _inner.ReadAsync(temp.AsMemory(0, buffer.Length), cancellationToken);
+            if (read <= 0) return read;
+
+            var text = Encoding.UTF8.GetString(temp, 0, read);
+            _buffer.Append(text);
+
+            var (output, remaining) = ExtractCompleteData(_buffer.ToString());
+            _buffer.Clear();
+            _buffer.Append(remaining);
+
+            var bytes = Encoding.UTF8.GetBytes(output);
+            var copyCount = Math.Min(bytes.Length, buffer.Length);
+            bytes.AsSpan(0, copyCount).CopyTo(buffer.Span);
+            return copyCount;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(temp);
+        }
+    }
+
+    // Keep the byte[] override for compatibility
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        return base.ReadAsync(buffer, offset, count, cancellationToken);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (disposing)
+        {
+            _inner.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// Extracts complete data from the buffer, holding back partial "True"/"False" at the end.
+    /// Returns (dataToOutput, remainingPartial).
+    /// Uses streaming-optimized conversion (no JSON parsing) since SSE chunks aren't pure JSON.
+    /// </summary>
+    private static (string output, string remaining) ExtractCompleteData(string buffer)
+    {
+        if (string.IsNullOrEmpty(buffer))
+            return ("", "");
+
+        // Check if buffer ends with a partial "True" or "False"
+        var holdback = GetHoldbackLength(buffer);
+
+        if (holdback > 0)
+        {
+            var safePart = buffer[..^holdback];
+            var partialPart = buffer[^holdback..];
+            var converted = ConvertPythonBooleansStreaming(safePart);
+            return (converted, partialPart);
+        }
+
+        // No partial match, convert and return everything
+        return (ConvertPythonBooleansStreaming(buffer), "");
+    }
+
+    /// <summary>
+    /// Returns how many characters at the end of the buffer might be the start
+    /// of an incomplete "True" or "False" that should be held back.
+    /// </summary>
+    private static int GetHoldbackLength(string buffer)
+    {
+        foreach (var partial in _partialFalse)
+        {
+            if (buffer.EndsWith(partial, StringComparison.Ordinal))
+                return partial.Length;
+        }
+        foreach (var partial in _partialTrue)
+        {
+            if (buffer.EndsWith(partial, StringComparison.Ordinal))
+                return partial.Length;
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Converts Python-style booleans (True/False) to JSON-style (true/false) in a JSON string.
+    /// Strategy: replace first → parse to validate → re-serialize for clean output.
+    /// Used for non-streaming responses where full JSON validation is desired.
+    /// </summary>
+    internal static string ConvertPythonBooleans(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        // Step 1: Replace Python-style booleans with JSON-style
+        var replaced = ReplacePythonBooleans(text);
+
+        // Step 2: Parse to validate and re-serialize (cleans up formatting)
+        try
+        {
+            using var doc = JsonDocument.Parse(replaced);
+            return JsonSerializer.Serialize(doc.RootElement);
+        }
+        catch
+        {
+            // Not valid JSON even after replacement, return replaced string
+            return replaced;
+        }
+    }
+
+    /// <summary>
+    /// Converts Python-style booleans for streaming SSE responses.
+    /// Only does string replacement without JSON parsing validation,
+    /// since SSE format (data: {...}\n) is not pure JSON.
+    /// </summary>
+    internal static string ConvertPythonBooleansStreaming(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        return ReplacePythonBooleans(text);
+    }
+
+    /// <summary>
+    /// Replaces Python-style booleans (True/False) with JSON-style (true/false).
+    /// Only replaces when they appear as JSON values (not inside string content).
+    /// </summary>
+    private static string ReplacePythonBooleans(string text)
+    {
+        var result = new StringBuilder(text.Length);
+        bool inString = false;
+        bool escaped = false;
+
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+
+            // Handle escape sequences inside strings
+            if (escaped)
+            {
+                result.Append(c);
+                escaped = false;
+                continue;
+            }
+
+            if (inString)
+            {
+                if (c == '\\')
+                {
+                    result.Append(c);
+                    escaped = true;
+                    continue;
+                }
+                if (c == '"')
+                {
+                    inString = false;
+                    result.Append(c);
+                    continue;
+                }
+                // Inside string, keep as-is
+                result.Append(c);
+                continue;
+            }
+
+            // Outside string
+            if (c == '"')
+            {
+                inString = true;
+                result.Append(c);
+                continue;
+            }
+
+            // Check for "True" (4 chars)
+            if (i + 4 <= text.Length && text.AsSpan(i, 4).SequenceEqual("True"))
+            {
+                result.Append("true");
+                i += 3; // Skip 'r', 'u', 'e'
+                continue;
+            }
+
+            // Check for "False" (5 chars)
+            if (i + 5 <= text.Length && text.AsSpan(i, 5).SequenceEqual("False"))
+            {
+                result.Append("false");
+                i += 4; // Skip 'a', 'l', 's', 'e'
+                continue;
+            }
+
+            result.Append(c);
+        }
+
+        return result.ToString();
+    }
 }
 
 /// <summary>
@@ -70,6 +330,26 @@ internal class MetricsCollectingStream : Stream
         var read = await _inner.ReadAsync(buffer, offset, count, cancellationToken);
         if (read > 0)
             await _copy.WriteAsync(buffer, offset, read, cancellationToken);
+        return read;
+    }
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        var read = await _inner.ReadAsync(buffer, cancellationToken);
+        if (read > 0)
+        {
+            // Copy to the internal stream for metrics collection
+            var temp = ArrayPool<byte>.Shared.Rent(read);
+            try
+            {
+                buffer.Span[..read].CopyTo(temp);
+                await _copy.WriteAsync(temp, 0, read, cancellationToken);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(temp);
+            }
+        }
         return read;
     }
 
@@ -242,8 +522,9 @@ internal class MetricsCollectingStream : Stream
 
 public class ProxyService : IProxyService
 {
+#if CACHE_REASONING_CONTENT
     private static readonly ConcurrentDictionary<string, string> ReasoningContentCache = new();
-
+#endif
     private readonly IConfigService _configService;
     private readonly IMetricsService _metricsService;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -338,9 +619,13 @@ public class ProxyService : IProxyService
                 var originalStream = await response.Content.ReadAsStreamAsync();
                 var teeStream = new MetricsCollectingStream(
                     originalStream, targetProviderType, metrics, stopwatch, _metricsService, _logger, response.IsSuccessStatusCode);
+
+                // Wrap with BooleanConvertStream to convert Python-style booleans to JSON-style
+                var booleanConvertStream = new BooleanConvertStream(teeStream);
+
                 // Replace content with the tee stream; preserve original content headers
                 var originalHeaders = response.Content.Headers.ToList();
-                response.Content = new StreamContent(teeStream);
+                response.Content = new StreamContent(booleanConvertStream);
                 foreach (var header in originalHeaders)
                 {
                     response.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
@@ -439,11 +724,12 @@ public class ProxyService : IProxyService
                     {
                         ConvertSystemRoleForAnthropic(jsonObj);
                     }
+#if CACHE_REASONING_CONTENT
                     else if (providerType == "openai")
                     {
                         NormalizeOpenAICompatibleRequest(jsonObj, provider.Id, model);
                     }
-
+#endif
                     var newBody = jsonObj.ToJsonString();
                     _logger.LogInformation("Body replaced: oldModel={OldModel}, newModel={NewModel}, body={Body}", oldModel, model, newBody);
                     forwardRequest.Content = new StringContent(newBody, System.Text.Encoding.UTF8, "application/json");
@@ -473,7 +759,7 @@ public class ProxyService : IProxyService
 
         return forwardRequest;
     }
-
+#if CACHE_REASONING_CONTENT
     private static void NormalizeOpenAICompatibleRequest(System.Text.Json.Nodes.JsonObject jsonObj, string providerId, string model)
     {
         if (jsonObj["messages"] is not System.Text.Json.Nodes.JsonArray messages)
@@ -503,7 +789,7 @@ public class ProxyService : IProxyService
             }
         }
     }
-
+#endif
     /// <summary>
     /// Anthropic's Messages API has no "system" message role; the system prompt must live in the
     /// top-level "system" field. Claude Code (and other OpenAI-style clients) may emit
