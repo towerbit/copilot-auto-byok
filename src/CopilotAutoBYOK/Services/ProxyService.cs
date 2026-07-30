@@ -577,14 +577,15 @@ public class ProxyService : IProxyService
 
             if (requestedModel.Equals("auto-copilot", StringComparison.OrdinalIgnoreCase))
             {
-                if (string.Equals(protocol, "anthropic", StringComparison.OrdinalIgnoreCase))
+                // 要解析 AnthropicCurrentModel/OpenAICurrentModel 获取实际的 modelName
+                if ("anthropic".Equals(protocol, StringComparison.OrdinalIgnoreCase))
                 {
-                    targetModel = config.AutoCopilot.AnthropicCurrentModel;
+                    targetModel = config.AutoCopilot.AnthropicCurrentModel.Split(',')[1];
                     targetProviderId = config.AutoCopilot.AnthropicCurrentProviderId;
                 }
                 else
                 {
-                    targetModel = config.AutoCopilot.OpenAICurrentModel;
+                    targetModel = config.AutoCopilot.OpenAICurrentModel.Split(',')[1];
                     targetProviderId = config.AutoCopilot.OpenAICurrentProviderId;
                 }
 
