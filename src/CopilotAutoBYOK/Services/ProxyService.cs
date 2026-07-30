@@ -577,9 +577,23 @@ public class ProxyService : IProxyService
 
             if (requestedModel.Equals("auto-copilot", StringComparison.OrdinalIgnoreCase))
             {
-                targetModel = config.AutoCopilot.CurrentModel;
-                targetProviderId = config.AutoCopilot.CurrentProviderId;
-                _logger.LogInformation("AutoCopilot resolved: model={TargetModel}, providerId={TargetProviderId}", targetModel, targetProviderId);
+                if (string.Equals(protocol, "anthropic", StringComparison.OrdinalIgnoreCase))
+                {
+                    targetModel = config.AutoCopilot.AnthropicCurrentModel;
+                    targetProviderId = config.AutoCopilot.AnthropicCurrentProviderId;
+                }
+                else
+                {
+                    targetModel = config.AutoCopilot.OpenAICurrentModel;
+                    targetProviderId = config.AutoCopilot.OpenAICurrentProviderId;
+                }
+
+                if (string.IsNullOrWhiteSpace(targetModel) || string.IsNullOrWhiteSpace(targetProviderId))
+                {
+                    throw new InvalidOperationException($"AutoCopilot binding is not configured for protocol '{protocol}'.");
+                }
+
+                _logger.LogInformation("AutoCopilot resolved: protocol={Protocol}, model={TargetModel}, providerId={TargetProviderId}", protocol, targetModel, targetProviderId);
             }
             else
             {

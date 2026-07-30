@@ -256,22 +256,10 @@ body {
 
 .tab-content {
     display: none;
-    animation: fadeSlideIn 0.25s var(--transition-normal);
 }
 
 .tab-content.active {
     display: block;
-}
-
-@keyframes fadeSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 /* ── Page Header ───────────────────────────────────────────── */
@@ -497,12 +485,24 @@ body {
     flex-shrink: 0;
 }
 
+.model-binding-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
+    gap: var(--space-4);
+    min-width: 320px;
+    flex: 1;
+    align-items: start;
+}
+
 .model-binding-control {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-    min-width: 280px;
-    flex: 1;
+    min-width: 0;
+}
+
+.model-binding-controls .status-msg {
+    grid-column: 1 / -1;
 }
 
 .model-binding-control label {
@@ -1467,12 +1467,6 @@ textarea {
     justify-content: center;
     z-index: 1000;
     padding: var(--space-4);
-    animation: fadeIn 0.15s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
 }
 
 .dialog {
@@ -1484,22 +1478,10 @@ textarea {
     max-width: 520px;
     max-height: 90vh;
     overflow-y: auto;
-    animation: dialogSlideUp 0.25s var(--transition-spring);
 }
 
 .dialog.dialog-wide {
     max-width: 680px;
-}
-
-@keyframes dialogSlideUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px) scale(0.97);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
 }
 
 .dialog-header {
@@ -1817,18 +1799,16 @@ textarea {
     font-size: 13px;
     font-weight: 500;
     z-index: 2000;
-    animation: toastSlideUp 0.3s var(--transition-spring);
 }
 
-@keyframes toastSlideUp {
-    from {
-        opacity: 0;
-        transform: translateX(-50%) translateY(16px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-    }
+.toast.error {
+    color: var(--error);
+    background: var(--error-bg);
+    border-color: color-mix(in srgb, var(--error) 25%, var(--border-default));
+}
+
+.toast[hidden] {
+    display: none;
 }
 
 /* ── Status Badge ──────────────────────────────────────────── */
@@ -1903,5 +1883,10 @@ textarea {
 
     .providers-grid {
         grid-template-columns: 1fr;
+    }
+
+    .model-binding-controls {
+        grid-template-columns: 1fr;
+        min-width: 0;
     }
 }

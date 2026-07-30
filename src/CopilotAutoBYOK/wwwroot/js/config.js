@@ -30,6 +30,7 @@ async function loadConfig() {
 
         renderProviders();
         renderAutoCopilot();
+        updateAutoCopilotBindingSummary();
         renderApiKeys();
         renderConnectionInfo();
         renderByokForm();
@@ -576,54 +577,90 @@ async function deleteProvider(id) {
 }
 
 // ===== AutoCopilot =====
-function renderAutoCopilot() {
-    const select = document.getElementById('autocopilotModel');
-    if (!select) return;
+function buildAutoCopilotOptions(type) {
+    const filteredProviders = providers.filter(p => p.type === type);
+    let options = `<option value="">-- 选择${type === 'openai' ? ' OpenAI ' : ' Anthropic '}模型 --</option>`;
 
-    let options = '<option value="">-- 选择模型 --</option>';
-    for (const p of providers) {
+    for (const p of filteredProviders) {
         const visibleSet = new Set(p.visibleModels || p.models || []);
         for (const m of p.models || []) {
             if (!visibleSet.has(m)) continue;
-            const selected = (autocopilot.currentModel === m && autocopilot.currentProviderId === p.id) ? 'selected' : '';
-            options += `<option value="${m}" data-provider="${p.id}" ${selected}>${escapeHtml(m)} (${escapeHtml(p.name)})</option>`;
+            const qualifiedModel = `${p.name},${m}`;
+            const selected = type === 'openai'
+                ? (autocopilot.openAICurrentModel === qualifiedModel && autocopilot.openAICurrentProviderId === p.id)
+                : (autocopilot.anthropicCurrentModel === qualifiedModel && autocopilot.anthropicCurrentProviderId === p.id);
+            options += `<option value="${escapeHtml(qualifiedModel)}" data-provider="${p.id}" ${selected ? 'selected' : ''}>${escapeHtml(qualifiedModel)}</option>`;
         }
     }
-    select.innerHTML = options;
+
+    return options;
 }
 
-async function switchAutoCopilotModel() {
-    const select = document.getElementById('autocopilotModel');
-    const option = select.options[select.selectedIndex];
-    const model = select.value;
-    const providerId = option.dataset.provider || '';
+function renderAutoCopilot() {
+    const openAISelect = document.getElementById('autocopilotOpenAIModel');
+    const anthropicSelect = document.getElementById('autocopilotAnthropicModel');
+
+    if (openAISelect) {
+        openAISelect.innerHTML = buildAutoCopilotOptions('openai');
+    }
+    if (anthropicSelect) {
+        anthropicSelect.innerHTML = buildAutoCopilotOptions('anthropic');
+    }
+}
+
+function updateAutoCopilotBindingSummary() {
+    const bindingEl = document.getElementById('conn-binding');
+    const dot = document.getElementById('binding-dot');
+    const openAISummary = autocopilot?.openAICurrentModel || '未配置';
+    const anthropicSummary = autocopilot?.anthropicCurrentModel || '未配置';
+    const hasAnyBinding = !!(autocopilot?.openAICurrentModel || autocopilot?.anthropicCurrentModel);
+
+    if (bindingEl) {
+        bindingEl.textContent = `OpenAI: ${openAISummary} | Anthropic: ${anthropicSummary}`;
+    }
+    if (dot) {
+        dot.classList.toggle('active', hasAnyBinding);
+    }
+}
+
+async function switchAutoCopilotModel(type) {
+    const isOpenAI = type === 'openai';
+    const select = document.getElementById(isOpenAI ? 'autocopilotOpenAIModel' : 'autocopilotAnthropicModel');
+    const option = select?.options[select.selectedIndex];
+    const model = select?.value || '';
+    const providerId = option?.dataset.provider || '';
 
     if (!model) {
-        showToast('请选择一个模型', 'error');
+        showToast(`请选择一个${isOpenAI ? ' OpenAI ' : ' Anthropic '}模型`, 'error');
         return;
     }
+
+    const payload = {
+        openAICurrentModel: isOpenAI ? model : (autocopilot?.openAICurrentModel || ''),
+        openAICurrentProviderId: isOpenAI ? providerId : (autocopilot?.openAICurrentProviderId || ''),
+        anthropicCurrentModel: isOpenAI ? (autocopilot?.anthropicCurrentModel || '') : model,
+        anthropicCurrentProviderId: isOpenAI ? (autocopilot?.anthropicCurrentProviderId || '') : providerId
+    };
 
     try {
         const res = await fetch(`${API_BASE}/autocopilot`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ currentModel: model, currentProviderId: providerId })
+            body: JSON.stringify(payload)
         });
 
         if (!res.ok) throw new Error('切换失败');
 
-        const msg = document.getElementById('autocopilotStatus');
-        const bindingEl = document.getElementById('conn-binding');
-        const dot = document.getElementById('binding-dot');
+        autocopilot = payload;
+        updateAutoCopilotBindingSummary();
 
+        const msg = document.getElementById('autocopilotStatus');
         if (msg) {
-            msg.textContent = '✓ 已切换到 ' + model;
+            msg.textContent = `✓ 已切换${isOpenAI ? ' OpenAI ' : ' Anthropic '}绑定到 ${model}`;
             msg.className = 'status-msg success';
         }
-        if (bindingEl) bindingEl.textContent = model;
-        if (dot) dot.classList.add('active');
 
-        showToast('已切换到 ' + model);
+        showToast(`已切换${isOpenAI ? ' OpenAI ' : ' Anthropic '}绑定到 ${model}`);
     } catch (err) {
         const msg = document.getElementById('autocopilotStatus');
         if (msg) {
@@ -860,14 +897,23 @@ async function copyToClipboard(elementId) {
 
 // ===== Toast =====
 function showToast(message, type = 'success') {
-    const existing = document.querySelector('.toast');
-    if (existing) existing.remove();
+    let toast = document.querySelector('.toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.className = 'toast';
+        document.body.appendChild(toast);
+    }
 
-    const toast = document.createElement('div');
-    toast.className = 'toast';
+    toast.className = `toast ${type}`;
     toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2200);
+    clearTimeout(toast._dismissTimer);
+    toast.hidden = false;
+    toast.style.animation = 'none';
+    toast.offsetHeight;
+    toast.style.animation = '';
+    toast._dismissTimer = setTimeout(() => {
+        toast.hidden = true;
+    }, 4200);
 }
 
 // ===== Utility =====

@@ -36,8 +36,10 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<AutoCopilotBindingEntity>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.CurrentModel).HasMaxLength(200);
-            entity.Property(e => e.CurrentProviderId).HasMaxLength(50);
+            entity.Property(e => e.OpenAICurrentModel).HasMaxLength(200);
+            entity.Property(e => e.OpenAICurrentProviderId).HasMaxLength(50);
+            entity.Property(e => e.AnthropicCurrentModel).HasMaxLength(200);
+            entity.Property(e => e.AnthropicCurrentProviderId).HasMaxLength(50);
         });
 
         modelBuilder.Entity<ByokEnvConfigEntity>(entity =>
@@ -117,8 +119,10 @@ public class ApiKeyConfigEntity
 public class AutoCopilotBindingEntity
 {
     public int Id { get; set; } = 1;
-    public string CurrentModel { get; set; } = "";
-    public string CurrentProviderId { get; set; } = "";
+    public string? OpenAICurrentModel { get; set; }
+    public string? OpenAICurrentProviderId { get; set; }
+    public string? AnthropicCurrentModel { get; set; }
+    public string? AnthropicCurrentProviderId { get; set; }
 }
 
 public class ByokEnvConfigEntity

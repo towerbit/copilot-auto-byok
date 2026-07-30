@@ -118,15 +118,28 @@
                         </div>
                     </div>
                     <div class="model-binding-divider"></div>
-                    <div class="model-binding-control">
-                        <label>切换绑定模型</label>
-                        <div class="fluent-select-wrapper">
-                            <select id="autocopilotModel" onchange="switchAutoCopilotModel()">
-                                <option value="">请先配置提供商</option>
-                            </select>
-                            <svg class="fluent-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
+                    <div class="model-binding-controls">
+                        <div class="model-binding-control">
+                            <label>OpenAI 入站绑定</label>
+                            <div class="fluent-select-wrapper">
+                                <select id="autocopilotOpenAIModel" onchange="switchAutoCopilotModel('openai')">
+                                    <option value="">请先配置 OpenAI 提供商</option>
+                                </select>
+                                <svg class="fluent-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="model-binding-control">
+                            <label>Anthropic 入站绑定</label>
+                            <div class="fluent-select-wrapper">
+                                <select id="autocopilotAnthropicModel" onchange="switchAutoCopilotModel('anthropic')">
+                                    <option value="">请先配置 Anthropic 提供商</option>
+                                </select>
+                                <svg class="fluent-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </div>
                         </div>
                         <span id="autocopilotStatus" class="status-msg"></span>
                     </div>

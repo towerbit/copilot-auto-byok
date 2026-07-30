@@ -50,16 +50,31 @@ public class AdminController : ControllerBase
         if (string.IsNullOrWhiteSpace(provider.Name))
             return BadRequest(new { error = "Provider name is required" });
 
-        _configService.AddProvider(provider);
-        return Ok(provider);
+        try
+        {
+            _configService.AddProvider(provider);
+            return Ok(provider);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPut("providers/{id}")]
     public IActionResult UpdateProvider(string id, [FromBody] ProviderConfig provider)
     {
         provider.Id = id;
-        _configService.UpdateProvider(provider);
-        return Ok(new { message = "Provider updated" });
+
+        try
+        {
+            _configService.UpdateProvider(provider);
+            return Ok(new { message = "Provider updated" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpDelete("providers/{id}")]

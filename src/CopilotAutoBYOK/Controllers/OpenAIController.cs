@@ -121,8 +121,10 @@ public class OpenAIController : ControllerBase
             ["id"] = "auto-copilot",
             ["object"] = "model",
             ["owned_by"] = "autocopilot",
-            ["current_model"] = config.AutoCopilot.CurrentModel,
-            ["current_provider_id"] = config.AutoCopilot.CurrentProviderId
+            ["openai_current_model"] = config.AutoCopilot.OpenAICurrentModel,
+            ["openai_current_provider_id"] = config.AutoCopilot.OpenAICurrentProviderId,
+            ["anthropic_current_model"] = config.AutoCopilot.AnthropicCurrentModel,
+            ["anthropic_current_provider_id"] = config.AutoCopilot.AnthropicCurrentProviderId
         });
 
         foreach (var provider in config.Providers)

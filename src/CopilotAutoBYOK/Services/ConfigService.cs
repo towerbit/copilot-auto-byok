@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Security;
 using copilot_auto_byok.Data;
 using copilot_auto_byok.Models;
@@ -32,6 +33,7 @@ public class ConfigService : IConfigService
         // Ensure database is created
         using var context = _contextFactory.CreateDbContext();
         context.Database.EnsureCreated();
+        EnsureAutoCopilotDualBindingColumns(context);
 
         // Apply persisted BYOK env on startup in background to avoid blocking
         var byok = context.ByokEnv.OrderBy(e => e.Id).FirstOrDefault();
@@ -95,6 +97,12 @@ public class ConfigService : IConfigService
         if (provider.CreatedAt == default)
             provider.CreatedAt = DateTime.UtcNow;
 
+        var providerName = provider.Name.Trim();
+        var nameExists = context.Providers.Any(p => p.Name == providerName);
+        if (nameExists)
+            throw new InvalidOperationException($"Provider name '{providerName}' already exists.");
+
+        provider.Name = providerName;
         context.Providers.Add(MapToEntity(provider));
         context.SaveChanges();
 
@@ -107,7 +115,12 @@ public class ConfigService : IConfigService
         var entity = context.Providers.FirstOrDefault(p => p.Id == provider.Id);
         if (entity == null) return;
 
-        entity.Name = provider.Name;
+        var providerName = provider.Name.Trim();
+        var nameExists = context.Providers.Any(p => p.Id != provider.Id && p.Name == providerName);
+        if (nameExists)
+            throw new InvalidOperationException($"Provider name '{providerName}' already exists.");
+
+        entity.Name = providerName;
         entity.Type = provider.Type;
         entity.BaseUrl = provider.BaseUrl;
         entity.ApiKey = provider.ApiKey;
@@ -144,11 +157,7 @@ public class ConfigService : IConfigService
             var entity = context.AutoCopilot.OrderBy(e => e.Id).FirstOrDefault();
             if (entity != null)
             {
-                var binding = new AutoCopilotBinding
-                {
-                    CurrentModel = entity.CurrentModel,
-                    CurrentProviderId = entity.CurrentProviderId
-                };
+                var binding = MapToAutoCopilotBinding(entity);
                 _cache.Set(CacheAutoCopilot, binding, new MemoryCacheEntryOptions
                 {
                     AbsoluteExpirationRelativeToNow = CacheExpiration,
@@ -163,11 +172,7 @@ public class ConfigService : IConfigService
                 entity = context.AutoCopilot.OrderBy(e => e.Id).FirstOrDefault();
                 if (entity != null)
                 {
-                    var binding = new AutoCopilotBinding
-                    {
-                        CurrentModel = entity.CurrentModel,
-                        CurrentProviderId = entity.CurrentProviderId
-                    };
+                    var binding = MapToAutoCopilotBinding(entity);
                     _cache.Set(CacheAutoCopilot, binding, new MemoryCacheEntryOptions
                     {
                         AbsoluteExpirationRelativeToNow = CacheExpiration,
@@ -180,11 +185,7 @@ public class ConfigService : IConfigService
                 context.AutoCopilot.Add(entity);
                 context.SaveChanges();
 
-                var newBinding = new AutoCopilotBinding
-                {
-                    CurrentModel = entity.CurrentModel,
-                    CurrentProviderId = entity.CurrentProviderId
-                };
+                var newBinding = MapToAutoCopilotBinding(entity);
                 _cache.Set(CacheAutoCopilot, newBinding, new MemoryCacheEntryOptions
                 {
                     AbsoluteExpirationRelativeToNow = CacheExpiration,
@@ -204,11 +205,29 @@ public class ConfigService : IConfigService
             entity = new AutoCopilotBindingEntity();
             context.AutoCopilot.Add(entity);
         }
-        entity.CurrentModel = binding.CurrentModel;
-        entity.CurrentProviderId = binding.CurrentProviderId;
+        entity.OpenAICurrentModel = binding.OpenAICurrentModel;
+        entity.OpenAICurrentProviderId = binding.OpenAICurrentProviderId;
+        entity.AnthropicCurrentModel = binding.AnthropicCurrentModel;
+        entity.AnthropicCurrentProviderId = binding.AnthropicCurrentProviderId;
         context.SaveChanges();
 
         _cache.Remove(CacheAutoCopilot);
+    }
+
+    private static AutoCopilotBinding MapToAutoCopilotBinding(AutoCopilotBindingEntity entity)
+    {
+        var openAIModel = entity.OpenAICurrentModel ?? string.Empty;
+        var openAIProviderId = entity.OpenAICurrentProviderId ?? string.Empty;
+        var anthropicModel = entity.AnthropicCurrentModel;
+        var anthropicProviderId = entity.AnthropicCurrentProviderId;
+
+        return new AutoCopilotBinding
+        {
+            OpenAICurrentModel = openAIModel,
+            OpenAICurrentProviderId = openAIProviderId,
+            AnthropicCurrentModel = string.IsNullOrWhiteSpace(anthropicModel) ? openAIModel : anthropicModel,
+            AnthropicCurrentProviderId = string.IsNullOrWhiteSpace(anthropicProviderId) ? openAIProviderId : anthropicProviderId
+        };
     }
 
     public List<ApiKeyConfig> GetApiKeys()
@@ -362,6 +381,140 @@ public class ConfigService : IConfigService
         ProviderMaxPromptTokens = e.ProviderMaxPromptTokens,
         ProviderMaxOutputTokens = e.ProviderMaxOutputTokens
     };
+
+    private void EnsureAutoCopilotDualBindingColumns(AppDbContext context)
+    {
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State != System.Data.ConnectionState.Open;
+        if (shouldClose)
+            connection.Open();
+
+        try
+        {
+            var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var pragma = connection.CreateCommand())
+            {
+                pragma.CommandText = "PRAGMA table_info('AutoCopilot');";
+                using var reader = pragma.ExecuteReader();
+                while (reader.Read())
+                {
+                    existingColumns.Add(reader.GetString(1));
+                }
+            }
+
+            EnsureColumn(connection, existingColumns, "OpenAICurrentModel", "TEXT");
+            EnsureColumn(connection, existingColumns, "OpenAICurrentProviderId", "TEXT");
+            EnsureColumn(connection, existingColumns, "AnthropicCurrentModel", "TEXT");
+            EnsureColumn(connection, existingColumns, "AnthropicCurrentProviderId", "TEXT");
+
+            using (var normalizeNullCommand = connection.CreateCommand())
+            {
+                normalizeNullCommand.CommandText = @"
+UPDATE AutoCopilot
+SET OpenAICurrentModel = COALESCE(OpenAICurrentModel, ''),
+    OpenAICurrentProviderId = COALESCE(OpenAICurrentProviderId, ''),
+    AnthropicCurrentModel = COALESCE(AnthropicCurrentModel, ''),
+    AnthropicCurrentProviderId = COALESCE(AnthropicCurrentProviderId, '')
+WHERE OpenAICurrentModel IS NULL
+   OR OpenAICurrentProviderId IS NULL
+   OR AnthropicCurrentModel IS NULL
+   OR AnthropicCurrentProviderId IS NULL;";
+                normalizeNullCommand.ExecuteNonQuery();
+            }
+
+            using var legacyBindingCommand = connection.CreateCommand();
+            legacyBindingCommand.CommandText = @"
+SELECT CurrentModel, CurrentProviderId,
+       OpenAICurrentModel, OpenAICurrentProviderId,
+       AnthropicCurrentModel, AnthropicCurrentProviderId
+FROM AutoCopilot
+WHERE Id = 1;";
+
+            using var bindingReader = legacyBindingCommand.ExecuteReader();
+            if (!bindingReader.Read())
+                return;
+
+            var currentModel = bindingReader.IsDBNull(0) ? "" : bindingReader.GetString(0);
+            var currentProviderId = bindingReader.IsDBNull(1) ? "" : bindingReader.GetString(1);
+            var openAIModel = bindingReader.IsDBNull(2) ? "" : bindingReader.GetString(2);
+            var openAIProviderId = bindingReader.IsDBNull(3) ? "" : bindingReader.GetString(3);
+            var anthropicModel = bindingReader.IsDBNull(4) ? "" : bindingReader.GetString(4);
+            var anthropicProviderId = bindingReader.IsDBNull(5) ? "" : bindingReader.GetString(5);
+            bindingReader.Close();
+
+            if (string.IsNullOrWhiteSpace(currentModel) || string.IsNullOrWhiteSpace(currentProviderId))
+                return;
+
+            using var providerCommand = connection.CreateCommand();
+            providerCommand.CommandText = "SELECT Type FROM Providers WHERE Id = $providerId LIMIT 1;";
+            var providerIdParameter = providerCommand.CreateParameter();
+            providerIdParameter.ParameterName = "$providerId";
+            providerIdParameter.Value = currentProviderId;
+            providerCommand.Parameters.Add(providerIdParameter);
+            var providerType = providerCommand.ExecuteScalar() as string;
+
+            if (string.IsNullOrWhiteSpace(providerType))
+                return;
+
+            var isOpenAI = string.Equals(providerType, "openai", StringComparison.OrdinalIgnoreCase);
+            var isAnthropic = string.Equals(providerType, "anthropic", StringComparison.OrdinalIgnoreCase);
+            if (!isOpenAI && !isAnthropic)
+                return;
+
+            if (isOpenAI && (!string.IsNullOrWhiteSpace(openAIModel) || !string.IsNullOrWhiteSpace(openAIProviderId)))
+                return;
+
+            if (isAnthropic && (!string.IsNullOrWhiteSpace(anthropicModel) || !string.IsNullOrWhiteSpace(anthropicProviderId)))
+                return;
+
+            using var updateCommand = connection.CreateCommand();
+            if (isOpenAI)
+            {
+                updateCommand.CommandText = @"
+UPDATE AutoCopilot
+SET OpenAICurrentModel = $currentModel,
+    OpenAICurrentProviderId = $currentProviderId
+WHERE Id = 1;";
+            }
+            else
+            {
+                updateCommand.CommandText = @"
+UPDATE AutoCopilot
+SET AnthropicCurrentModel = $currentModel,
+    AnthropicCurrentProviderId = $currentProviderId
+WHERE Id = 1;";
+            }
+
+            var currentModelParameter = updateCommand.CreateParameter();
+            currentModelParameter.ParameterName = "$currentModel";
+            currentModelParameter.Value = currentModel;
+            updateCommand.Parameters.Add(currentModelParameter);
+
+            var currentProviderParameter = updateCommand.CreateParameter();
+            currentProviderParameter.ParameterName = "$currentProviderId";
+            currentProviderParameter.Value = currentProviderId;
+            updateCommand.Parameters.Add(currentProviderParameter);
+
+            updateCommand.ExecuteNonQuery();
+        }
+        finally
+        {
+            if (shouldClose)
+                connection.Close();
+        }
+    }
+
+    private void EnsureColumn(DbConnection connection, HashSet<string> existingColumns, string columnName, string columnType)
+    {
+        if (existingColumns.Contains(columnName))
+            return;
+
+        using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE AutoCopilot ADD COLUMN {columnName} {columnType};";
+        alter.ExecuteNonQuery();
+        existingColumns.Add(columnName);
+        _logger.LogInformation("Added SQLite column {ColumnName} to AutoCopilot table.", columnName);
+    }
 
     // ===== Environment Variables =====
     private static void ApplyByokEnvToUser(ByokEnvConfig config)

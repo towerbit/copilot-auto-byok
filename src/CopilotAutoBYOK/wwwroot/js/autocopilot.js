@@ -33,11 +33,15 @@ async function updateBindingDisplay() {
         const binding = await res.json();
         const el = document.getElementById('conn-binding');
         const dot = document.getElementById('binding-dot');
-        if (el && binding.currentModel) {
-            el.textContent = `${binding.currentModel}`;
-            if (dot) dot.classList.add('active');
-        } else {
-            if (dot) dot.classList.remove('active');
+        const openAISummary = binding.openAICurrentModel || '未配置';
+        const anthropicSummary = binding.anthropicCurrentModel || '未配置';
+        const hasAnyBinding = !!(binding.openAICurrentModel || binding.anthropicCurrentModel);
+
+        if (el) {
+            el.textContent = `OpenAI: ${openAISummary} | Anthropic: ${anthropicSummary}`;
+        }
+        if (dot) {
+            dot.classList.toggle('active', hasAnyBinding);
         }
     } catch {
         // ignore

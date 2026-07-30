@@ -47,6 +47,7 @@ builder.Services.AddCors(options =>
 var currentDir = Directory.GetCurrentDirectory();
 var dataDir = Path.Combine(currentDir, "Data");
 var dbPath = Path.Combine(dataDir, "app.db");
+Console.WriteLine($"SQLite database path: {dbPath}");
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 
@@ -118,7 +119,8 @@ static void MigrateJsonToSqlite(string configPath, IConfigService configService)
                 configService.AddApiKey(key);
         }
 
-        if (!string.IsNullOrWhiteSpace(oldConfig.AutoCopilot.CurrentModel))
+        if (!string.IsNullOrWhiteSpace(oldConfig.AutoCopilot.OpenAICurrentModel) ||
+            !string.IsNullOrWhiteSpace(oldConfig.AutoCopilot.AnthropicCurrentModel))
         {
             configService.UpdateAutoCopilotBinding(oldConfig.AutoCopilot);
         }
