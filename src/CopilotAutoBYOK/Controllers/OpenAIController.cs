@@ -115,12 +115,26 @@ public class OpenAIController : ControllerBase
     {
         var config = _configService.GetConfiguration();
         var models = new List<Dictionary<string, object>>();
+        var autoCopilotSupportedEndpointTypes = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(config.AutoCopilot.OpenAICurrentModel) &&
+            !string.IsNullOrWhiteSpace(config.AutoCopilot.OpenAICurrentProviderId))
+        {
+            autoCopilotSupportedEndpointTypes.Add("openai");
+        }
+
+        if (!string.IsNullOrWhiteSpace(config.AutoCopilot.AnthropicCurrentModel) &&
+            !string.IsNullOrWhiteSpace(config.AutoCopilot.AnthropicCurrentProviderId))
+        {
+            autoCopilotSupportedEndpointTypes.Add("anthropic");
+        }
 
         models.Add(new Dictionary<string, object>
         {
             ["id"] = "auto-copilot",
             ["object"] = "model",
             ["owned_by"] = "autocopilot",
+            ["supported_endpoint_types"] = autoCopilotSupportedEndpointTypes,
             ["openai_current_model"] = config.AutoCopilot.OpenAICurrentModel,
             ["openai_current_provider_id"] = config.AutoCopilot.OpenAICurrentProviderId,
             ["anthropic_current_model"] = config.AutoCopilot.AnthropicCurrentModel,
@@ -129,13 +143,18 @@ public class OpenAIController : ControllerBase
 
         foreach (var provider in config.Providers)
         {
+            var supportedEndpointTypes = string.IsNullOrWhiteSpace(provider.Type)
+                ? new List<string>()
+                : new List<string> { provider.Type };
+
             foreach (var modelName in provider.Models)
             {
                 models.Add(new Dictionary<string, object>
                 {
                     ["id"] = $"{provider.Name},{modelName}",
                     ["object"] = "model",
-                    ["owned_by"] = provider.Name
+                    ["owned_by"] = provider.Name,
+                    ["supported_endpoint_types"] = supportedEndpointTypes
                 });
             }
         }
