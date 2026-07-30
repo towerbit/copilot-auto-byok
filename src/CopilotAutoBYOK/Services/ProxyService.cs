@@ -742,6 +742,8 @@ public class ProxyService : IProxyService
             catch (Exception ex)
             {
                 _logger.LogWarning("Failed to parse body as JSON: {Error}. Forwarding as-is.", ex.Message);
+                // 这里原样发送 bodyText 显然也是错误的，因为 model 名字对不上，
+                // 除非目标服务器上恰好有叫 auto-copilot 的模型。最终仍返回报错
                 forwardRequest.Content = new StringContent(bodyText, System.Text.Encoding.UTF8, original.Content?.Headers.ContentType?.MediaType ?? "application/json");
             }
         }
@@ -753,6 +755,8 @@ public class ProxyService : IProxyService
         }
         else
         {
+            // 需要先删除 request.headers 的 x-api-key, 否则 TryAddWithoutValidation 添加不成功
+            forwardRequest.Headers.Remove("x-api-key"); 
             forwardRequest.Headers.TryAddWithoutValidation("x-api-key", provider.ApiKey);
             forwardRequest.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
         }
@@ -842,7 +846,7 @@ public class ProxyService : IProxyService
             }
             else
             {
-                newMessages.Add(m!);
+                newMessages.Add(m!.DeepClone());
             }
         }
 
@@ -855,7 +859,7 @@ public class ProxyService : IProxyService
         {
             var arr = new System.Text.Json.Nodes.JsonArray();
             foreach (var block in preservedSystemBlocks)
-                arr.Add(block);
+                arr.Add(block.DeepClone());
             foreach (var t in systemTexts)
             {
                 var block = new System.Text.Json.Nodes.JsonObject
