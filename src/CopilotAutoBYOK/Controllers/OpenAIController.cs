@@ -131,7 +131,7 @@ public class OpenAIController : ControllerBase
             {
                 models.Add(new Dictionary<string, object>
                 {
-                    ["id"] = modelName,
+                    ["id"] = $"{provider.Name},{modelName}",
                     ["object"] = "model",
                     ["owned_by"] = provider.Name
                 });

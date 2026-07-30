@@ -570,7 +570,7 @@ public class ProxyService : IProxyService
 
         try
         {
-            // Resolve AutoCopilot
+            // Resolve AutoCopilot or an explicit providerName,modelName binding.
             string targetModel = requestedModel;
             string targetProviderId = "";
             string targetProviderType = protocol;
@@ -580,6 +580,37 @@ public class ProxyService : IProxyService
                 targetModel = config.AutoCopilot.CurrentModel;
                 targetProviderId = config.AutoCopilot.CurrentProviderId;
                 _logger.LogInformation("AutoCopilot resolved: model={TargetModel}, providerId={TargetProviderId}", targetModel, targetProviderId);
+            }
+            else
+            {
+                var commaIndex = requestedModel.IndexOf(',');
+                if (commaIndex <= 0 || commaIndex == requestedModel.Length - 1)
+                {
+                    throw new InvalidOperationException("Model name must use 'providerName,modelName' format, or 'auto-copilot'.");
+                }
+
+                var requestedProviderName = requestedModel[..commaIndex].Trim();
+                targetModel = requestedModel[(commaIndex + 1)..].Trim();
+
+                if (string.IsNullOrEmpty(requestedProviderName) || string.IsNullOrEmpty(targetModel))
+                {
+                    throw new InvalidOperationException("Model name must use 'providerName,modelName' format, or 'auto-copilot'.");
+                }
+
+                var explicitProvider = config.Providers.FirstOrDefault(p =>
+                    string.Equals(p.Name, requestedProviderName, StringComparison.OrdinalIgnoreCase));
+
+                if (explicitProvider == null)
+                {
+                    throw new InvalidOperationException($"Provider '{requestedProviderName}' not found for model '{requestedModel}'.");
+                }
+
+                if (!explicitProvider.Models.Contains(targetModel, StringComparer.Ordinal))
+                {
+                    throw new InvalidOperationException($"Model '{targetModel}' is not configured under provider '{explicitProvider.Name}'.");
+                }
+
+                targetProviderId = explicitProvider.Id;
             }
 
             // Resolve provider
@@ -592,10 +623,7 @@ public class ProxyService : IProxyService
 
             if (provider == null)
             {
-                provider = config.Providers.FirstOrDefault(p => p.Type == protocol);
-                if (provider == null)
-                    throw new InvalidOperationException($"No provider configured for protocol '{protocol}'");
-                targetProviderType = provider.Type;
+                throw new InvalidOperationException($"No provider resolved for model '{requestedModel}'.");
             }
 
             metrics.Provider = provider.Name;
