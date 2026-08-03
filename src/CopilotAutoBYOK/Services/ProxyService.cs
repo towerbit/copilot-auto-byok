@@ -5,6 +5,12 @@ True/False json 解析失败的问题后，感觉不应该人为干预 reasoning
 用条件编译参数 CACHE_REASONING_CONTENT 的方式，不再缓存和发送 reasoning_content
 */
 #undef CACHE_REASONING_CONTENT
+/*
+copilot 使用 mimo 工具调用还是出现失败反复尝试的问题，比如 grep_search 和 run_cmd_in_terminal
+启用 STRIP_REASONING_CONTENT 条件编译参数，从 request/response 中同步移除 reasoning_content
+通过 ShouldStripReasoningContent() 控制仅针对 mimo api 进行处理，不影响其他 LLM 模型的工具调用
+*/
+#define STRIP_REASONING_CONTENT
 using copilot_auto_byok.Models;
 using copilot_auto_byok.Models.Metrics;
 using System.Buffers;
@@ -272,6 +278,162 @@ internal class BooleanConvertStream : Stream
     }
 }
 
+#if STRIP_REASONING_CONTENT
+/// <summary>
+/// A stream wrapper that strips "reasoning_content" from JSON objects in SSE/streaming responses.
+/// </summary>
+internal class ReasoningContentStripStream : Stream
+{
+    private readonly Stream _inner;
+    private readonly StringBuilder _buffer = new();
+
+    public ReasoningContentStripStream(Stream inner) { _inner = inner; }
+
+    public override bool CanRead => _inner.CanRead;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => _inner.Length;
+    public override long Position { get => _inner.Position; set => throw new NotSupportedException(); }
+    public override void Flush() => _inner.Flush();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        var read = _inner.Read(buffer, offset, count);
+        if (read <= 0) return read;
+        return ProcessAndCopy(buffer, offset, count, read);
+    }
+
+    public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        var read = await _inner.ReadAsync(buffer, offset, count, cancellationToken);
+        if (read <= 0) return read;
+        return ProcessAndCopy(buffer, offset, count, read);
+    }
+
+    private int ProcessAndCopy(byte[] outputBuffer, int outputOffset, int maxCopy, int read)
+    {
+        var text = Encoding.UTF8.GetString(outputBuffer, outputOffset, read);
+        outputBuffer.AsSpan(outputOffset, read).Clear();
+        _buffer.Append(text);
+
+        var (processed, remaining) = ProcessSseBuffer(_buffer.ToString());
+        _buffer.Clear();
+        _buffer.Append(remaining);
+
+        var bytes = Encoding.UTF8.GetBytes(processed);
+        var copyCount = Math.Min(bytes.Length, maxCopy);
+        bytes.AsSpan(0, copyCount).CopyTo(outputBuffer.AsSpan(outputOffset, maxCopy));
+        return copyCount;
+    }
+
+    private static (string output, string remaining) ProcessSseBuffer(string buffer)
+    {
+        if (string.IsNullOrEmpty(buffer))
+            return ("", "");
+
+        var output = new StringBuilder();
+        var lastNewline = buffer.LastIndexOf('\n');
+
+        if (lastNewline < 0)
+        {
+            output.Append(StripReasoningFromLine(buffer));
+            return (output.ToString(), "");
+        }
+
+        var completePart = buffer[..(lastNewline + 1)];
+        var remaining = buffer[(lastNewline + 1)..];
+
+        foreach (var line in completePart.Split('\n'))
+        {
+            if (line.Length == 0)
+            {
+                output.AppendLine();
+                continue;
+            }
+            var stripped = StripReasoningFromLine(line);
+            output.AppendLine(stripped);
+        }
+
+        return (output.ToString(), remaining);
+    }
+
+    private static string StripReasoningFromLine(string line)
+    {
+        if (line.StartsWith("data: ", StringComparison.Ordinal))
+        {
+            var jsonPart = line["data: ".Length..];
+            if (jsonPart.Equals("[DONE]", StringComparison.Ordinal))
+                return line;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(jsonPart);
+                var newJson = StripReasoningFromJson(doc.RootElement);
+                return $"data: {newJson}";
+            }
+            catch
+            {
+                return line;
+            }
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(line);
+            return StripReasoningFromJson(doc.RootElement);
+        }
+        catch
+        {
+            return line;
+        }
+    }
+
+    private static string StripReasoningFromJson(JsonElement element)
+    {
+        using var ms = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = false, SkipValidation = true }))
+        {
+            WriteWithoutReasoning(writer, element);
+            writer.Flush();
+        }
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    private static void WriteWithoutReasoning(Utf8JsonWriter writer, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (var prop in element.EnumerateObject())
+                {
+                    if (string.Equals(prop.Name, "reasoning_content", StringComparison.Ordinal))
+                        continue;
+
+                    writer.WritePropertyName(prop.Name);
+                    WriteWithoutReasoning(writer, prop.Value);
+                }
+                writer.WriteEndObject();
+                break;
+
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var item in element.EnumerateArray())
+                    WriteWithoutReasoning(writer, item);
+                writer.WriteEndArray();
+                break;
+
+            default:
+                element.WriteTo(writer);
+                break;
+        }
+    }
+}
+#endif
+
 /// <summary>
 /// A stream that copies all read data to a memory buffer for later analysis.
 /// When disposed, it parses the collected data for usage metrics.
@@ -495,52 +657,66 @@ internal class MetricsCollectingStream : Stream
         }
         catch { }
     }
-
-    private static double CalculateCostStatic(RequestMetrics metrics)
-    {
-        var key = metrics.ActualModel.ToLower();
-        if (!ProxyService.Pricing.TryGetValue(key, out var price))
-        {
-            foreach (var (k, p) in ProxyService.Pricing)
-            {
-                if (key.Contains(k.ToLower()) || k.ToLower().Contains(key))
-                {
-                    price = p;
-                    break;
-                }
-            }
-        }
-        if (price == default) return 0;
-        var uncachedPromptTokens = metrics.PromptTokens - metrics.CachedTokens;
-        var cachedPromptTokens = metrics.CachedTokens;
-        var inputCost = (uncachedPromptTokens / 1_000_000.0) * price.input +
-                        (cachedPromptTokens / 1_000_000.0) * price.input * 0.5;
-        var outputCost = (metrics.CompletionTokens / 1_000_000.0) * price.output;
-        return Math.Round(inputCost + outputCost, 6);
-    }
+    /// <summary>
+    /// 费用以上游供应商账单为准，此处仅记录 Token 使用量，不估算费用
+    /// </summary>
+    /// <param name="metrics"></param>
+    /// <returns></returns>
+    private static double CalculateCostStatic(RequestMetrics metrics) => 0.0;
+    //{
+    //    var key = metrics.ActualModel.ToLower();
+    //    if (!ProxyService.Pricing.TryGetValue(key, out var price))
+    //    {
+    //        foreach (var (k, p) in ProxyService.Pricing)
+    //        {
+    //            if (key.Contains(k.ToLower()) || k.ToLower().Contains(key))
+    //            {
+    //                price = p;
+    //                break;
+    //            }
+    //        }
+    //    }
+    //    if (price == default) return 0;
+    //    var uncachedPromptTokens = metrics.PromptTokens - metrics.CachedTokens;
+    //    var cachedPromptTokens = metrics.CachedTokens;
+    //    var inputCost = (uncachedPromptTokens / 1_000_000.0) * price.input +
+    //                    (cachedPromptTokens / 1_000_000.0) * price.input * 0.5;
+    //    var outputCost = (metrics.CompletionTokens / 1_000_000.0) * price.output;
+    //    return Math.Round(inputCost + outputCost, 6);
+    //}
 }
 
 public class ProxyService : IProxyService
 {
 #if CACHE_REASONING_CONTENT
     private static readonly ConcurrentDictionary<string, string> ReasoningContentCache = new();
+    private static bool ShouldCacheReasoningContent(string model) =>
+        model.StartsWith("mimo", StringComparison.OrdinalIgnoreCase) &&
+        !model.Contains("tts", StringComparison.OrdinalIgnoreCase) &&
+        !model.Contains("asr", StringComparison.OrdinalIgnoreCase);
+#endif
+#if STRIP_REASONING_CONTENT
+    private static bool ShouldStripReasoningContent(string model) =>
+        model.StartsWith("mimo", StringComparison.OrdinalIgnoreCase) &&
+        !model.Contains("tts", StringComparison.OrdinalIgnoreCase) &&
+        !model.Contains("asr", StringComparison.OrdinalIgnoreCase);
 #endif
     private readonly IConfigService _configService;
     private readonly IMetricsService _metricsService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ProxyService> _logger;
-
+    // 实际用的根本就不是下面这些模型，预置价格毫无用处
     internal static readonly Dictionary<string, (double input, double output)> Pricing = new()
     {
-        ["gpt-4o"] = (2.50, 10.00),
-        ["gpt-4o-mini"] = (0.15, 0.60),
-        ["gpt-3.5-turbo"] = (0.50, 1.50),
-        ["gpt-4"] = (30.00, 60.00),
-        ["gpt-4-turbo"] = (10.00, 30.00),
-        ["claude-3-5-sonnet-20241022"] = (3.00, 15.00),
-        ["claude-3-opus-20240229"] = (15.00, 75.00),
-        ["claude-3-sonnet-20240229"] = (3.00, 15.00),
-        ["claude-3-haiku-20240307"] = (0.25, 1.25),
+        //["gpt-4o"] = (2.50, 10.00),
+        //["gpt-4o-mini"] = (0.15, 0.60),
+        //["gpt-3.5-turbo"] = (0.50, 1.50),
+        //["gpt-4"] = (30.00, 60.00),
+        //["gpt-4-turbo"] = (10.00, 30.00),
+        //["claude-3-5-sonnet-20241022"] = (3.00, 15.00),
+        //["claude-3-opus-20240229"] = (15.00, 75.00),
+        //["claude-3-sonnet-20240229"] = (3.00, 15.00),
+        //["claude-3-haiku-20240307"] = (0.25, 1.25),
     };
 
     public ProxyService(
@@ -663,21 +839,44 @@ public class ProxyService : IProxyService
                 var teeStream = new MetricsCollectingStream(
                     originalStream, targetProviderType, metrics, stopwatch, _metricsService, _logger, response.IsSuccessStatusCode);
 
-                // Wrap with BooleanConvertStream to convert Python-style booleans to JSON-style
-                var booleanConvertStream = new BooleanConvertStream(teeStream);
-
-                // Replace content with the tee stream; preserve original content headers
-                var originalHeaders = response.Content.Headers.ToList();
-                response.Content = new StreamContent(booleanConvertStream);
-                foreach (var header in originalHeaders)
+#if STRIP_REASONING_CONTENT
+                if (ShouldStripReasoningContent(targetModel))
                 {
-                    response.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                    var stripStream = new ReasoningContentStripStream(teeStream);
+                    var booleanConvertStream = new BooleanConvertStream(stripStream);
+                    var originalHeaders = response.Content.Headers.ToList();
+                    response.Content = new StreamContent(booleanConvertStream);
+                    foreach (var header in originalHeaders)
+                    {
+                        response.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                    }
+                    return response;
                 }
-                return response;
+                else
+#endif
+                {
+                    // Wrap with BooleanConvertStream to convert Python-style booleans to JSON-style
+                    var booleanConvertStream = new BooleanConvertStream(teeStream);
+
+                    // Replace content with the tee stream; preserve original content headers
+                    var originalHeaders = response.Content.Headers.ToList();
+                    response.Content = new StreamContent(booleanConvertStream);
+                    foreach (var header in originalHeaders)
+                    {
+                        response.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                    }
+                    return response;
+                }
             }
             else
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
+#if STRIP_REASONING_CONTENT
+                if (ShouldStripReasoningContent(targetModel))
+                {
+                    responseContent = StripReasoningContentFromJsonString(responseContent);
+                }
+#endif
                 if (targetProviderType == "openai")
                     ParseOpenAIUsage(responseContent, metrics);
                 else
@@ -768,7 +967,7 @@ public class ProxyService : IProxyService
                         ConvertSystemRoleForAnthropic(jsonObj);
                     }
 #if CACHE_REASONING_CONTENT
-                    else if (providerType == "openai")
+                    else if (providerType == "openai" && ShouldCacheReasoningContent(model))
                     {
                         NormalizeOpenAICompatibleRequest(jsonObj, provider.Id, model);
                     }
@@ -837,6 +1036,98 @@ public class ProxyService : IProxyService
         }
     }
 #endif
+
+#if STRIP_REASONING_CONTENT
+    private static string StripReasoningContentFromJsonString(string jsonText)
+    {
+        if (string.IsNullOrEmpty(jsonText))
+            return jsonText;
+
+        var output = new StringBuilder();
+        var lines = jsonText.Split(['\n'], StringSplitOptions.None);
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("data: ", StringComparison.Ordinal))
+            {
+                var jsonPart = line["data: ".Length..];
+                if (jsonPart.Equals("[DONE]", StringComparison.Ordinal))
+                {
+                    output.AppendLine(line);
+                    continue;
+                }
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(jsonPart);
+                    var newJson = StripReasoningFromJson(doc.RootElement);
+                    output.AppendLine($"data: {newJson}");
+                }
+                catch
+                {
+                    output.AppendLine(line);
+                }
+            }
+            else
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(line);
+                    var newJson = StripReasoningFromJson(doc.RootElement);
+                    output.AppendLine(newJson);
+                }
+                catch
+                {
+                    output.AppendLine(line);
+                }
+            }
+        }
+
+        return output.ToString();
+    }
+
+    private static string StripReasoningFromJson(JsonElement element)
+    {
+        using var ms = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = false, SkipValidation = true }))
+        {
+            WriteWithoutReasoning(writer, element);
+            writer.Flush();
+        }
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    private static void WriteWithoutReasoning(Utf8JsonWriter writer, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (var prop in element.EnumerateObject())
+                {
+                    if (string.Equals(prop.Name, "reasoning_content", StringComparison.Ordinal))
+                        continue;
+
+                    writer.WritePropertyName(prop.Name);
+                    WriteWithoutReasoning(writer, prop.Value);
+                }
+                writer.WriteEndObject();
+                break;
+
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var item in element.EnumerateArray())
+                    WriteWithoutReasoning(writer, item);
+                writer.WriteEndArray();
+                break;
+
+            default:
+                element.WriteTo(writer);
+                break;
+        }
+    }
+#endif
+
     /// <summary>
     /// Anthropic's Messages API has no "system" message role; the system prompt must live in the
     /// top-level "system" field. Claude Code (and other OpenAI-style clients) may emit
@@ -1008,31 +1299,31 @@ public class ProxyService : IProxyService
         catch { }
     }
 
-    private double CalculateCost(RequestMetrics metrics)
-    {
-        var key = metrics.ActualModel.ToLower();
-        if (!Pricing.TryGetValue(key, out var price))
-        {
-            foreach (var (k, p) in Pricing)
-            {
-                if (key.Contains(k.ToLower()) || k.ToLower().Contains(key))
-                {
-                    price = p;
-                    break;
-                }
-            }
-        }
+    private double CalculateCost(RequestMetrics metrics) => 0.0;
+    //{
+    //    var key = metrics.ActualModel.ToLower();
+    //    if (!Pricing.TryGetValue(key, out var price))
+    //    {
+    //        foreach (var (k, p) in Pricing)
+    //        {
+    //            if (key.Contains(k.ToLower()) || k.ToLower().Contains(key))
+    //            {
+    //                price = p;
+    //                break;
+    //            }
+    //        }
+    //    }
 
-        if (price == default)
-            return 0;
+    //    if (price == default)
+    //        return 0;
 
-        // Cache hit tokens are discounted 50% for prompt/input tokens
-        var uncachedPromptTokens = metrics.PromptTokens - metrics.CachedTokens;
-        var cachedPromptTokens = metrics.CachedTokens;
+    //    // Cache hit tokens are discounted 50% for prompt/input tokens
+    //    var uncachedPromptTokens = metrics.PromptTokens - metrics.CachedTokens;
+    //    var cachedPromptTokens = metrics.CachedTokens;
 
-        var inputCost = (uncachedPromptTokens / 1_000_000.0) * price.input +
-                        (cachedPromptTokens / 1_000_000.0) * price.input * 0.5;
-        var outputCost = (metrics.CompletionTokens / 1_000_000.0) * price.output;
-        return Math.Round(inputCost + outputCost, 6);
-    }
+    //    var inputCost = (uncachedPromptTokens / 1_000_000.0) * price.input +
+    //                    (cachedPromptTokens / 1_000_000.0) * price.input * 0.5;
+    //    var outputCost = (metrics.CompletionTokens / 1_000_000.0) * price.output;
+    //    return Math.Round(inputCost + outputCost, 6);
+    //}
 }
