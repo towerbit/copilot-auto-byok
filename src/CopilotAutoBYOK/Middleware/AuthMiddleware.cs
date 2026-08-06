@@ -27,6 +27,7 @@ public class AuthMiddleware
             path.StartsWith("/js/", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/favicon", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase) ||
             path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);

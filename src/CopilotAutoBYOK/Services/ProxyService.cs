@@ -777,7 +777,7 @@ public class ProxyService : IProxyService
                 var commaIndex = requestedModel.IndexOf(',');
                 if (commaIndex <= 0 || commaIndex == requestedModel.Length - 1)
                 {
-                    throw new InvalidOperationException("Model name must use 'providerName,modelName' format, or 'auto-copilot'.");
+                    throw new InvalidOperationException("Model name must use 'provider,model' format, or 'auto-copilot'.");
                 }
 
                 var requestedProviderName = requestedModel[..commaIndex].Trim();

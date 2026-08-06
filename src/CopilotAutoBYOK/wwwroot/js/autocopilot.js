@@ -20,6 +20,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    const exampleTabs = document.querySelectorAll('.byok-example-tab');
+    const examplePanels = document.querySelectorAll('.byok-example');
+    exampleTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            exampleTabs.forEach(item => {
+                item.classList.remove('active');
+                item.setAttribute('aria-selected', 'false');
+            });
+            examplePanels.forEach(panel => {
+                panel.classList.remove('active');
+                panel.hidden = true;
+            });
+
+            tab.classList.add('active');
+            tab.setAttribute('aria-selected', 'true');
+            const panel = document.getElementById(`byok-example-${tab.dataset.example}`);
+            if (panel) {
+                panel.classList.add('active');
+                panel.hidden = false;
+            }
+        });
+    });
+
     // Update binding display
     updateBindingDisplay();
 

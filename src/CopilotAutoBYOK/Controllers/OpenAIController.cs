@@ -1,6 +1,7 @@
-using Microsoft.AspNetCore.Mvc;
 using copilot_auto_byok.Services;
-using copilot_auto_byok.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using System.Text.Json;
 
 namespace copilot_auto_byok.Controllers;
 
@@ -12,7 +13,9 @@ public class OpenAIController : ControllerBase
     private readonly IConfigService _configService;
     private readonly ILogger<OpenAIController> _logger;
 
-    public OpenAIController(IProxyService proxyService, IConfigService configService, ILogger<OpenAIController> logger)
+    public OpenAIController(IProxyService proxyService, 
+                            IConfigService configService, 
+                            ILogger<OpenAIController> logger)
     {
         _proxyService = proxyService;
         _configService = configService;
@@ -20,26 +23,41 @@ public class OpenAIController : ControllerBase
     }
 
     [HttpPost("responses")]
-    public async Task ProxyResponses()
+    [Consumes("application/json")]
+    public async Task ProxyResponses(
+        [FromHeader(Name = "Authorization")] string? authorization,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] JsonElement? body)
     {
+        // Expose Authorization header in Swagger UI as a Bearer token.
+        if (!string.IsNullOrWhiteSpace(authorization))
+        { 
+            if(!authorization.StartsWith("Bearer "))
+                authorization = "Bearer " + authorization;
+            Request.Headers["Authorization"] = authorization;
+        }
+
         try
         {
-            Request.EnableBuffering();
-            var bodyText = await new StreamReader(Request.Body).ReadToEndAsync();
-            Request.Body.Position = 0;
-
+            string bodyText = string.Empty;
             string model = "gpt-3.5-turbo";
             bool isStreaming = false;
 
-            try
+            if (body is JsonElement jsonBody)
             {
-                using var doc = System.Text.Json.JsonDocument.Parse(bodyText);
-                if (doc.RootElement.TryGetProperty("model", out var modelProp))
-                    model = modelProp.GetString() ?? model;
-                if (doc.RootElement.TryGetProperty("stream", out var streamProp))
-                    isStreaming = streamProp.GetBoolean();
+                bodyText = jsonBody.GetRawText();
+
+                try
+                {
+                    if (jsonBody.ValueKind == JsonValueKind.Object)
+                    {
+                        if (jsonBody.TryGetProperty("model", out var modelProp))
+                            model = modelProp.GetString() ?? model;
+                        if (jsonBody.TryGetProperty("stream", out var streamProp))
+                            isStreaming = streamProp.GetBoolean();
+                    }
+                }
+                catch { /* ignore parse errors, use defaults */ }
             }
-            catch { /* ignore parse errors, use defaults */ }
 
             var requestMessage = new HttpRequestMessage(HttpMethod.Post, Request.Path + Request.QueryString)
             {
@@ -72,7 +90,7 @@ public class OpenAIController : ControllerBase
             if (!isStreaming)
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
-                responseContent = copilot_auto_byok.Services.BooleanConvertStream.ConvertPythonBooleans(responseContent);
+                responseContent = BooleanConvertStream.ConvertPythonBooleans(responseContent);
                 await Response.WriteAsync(responseContent);
                 await Response.Body.FlushAsync();
                 return;
@@ -96,33 +114,49 @@ public class OpenAIController : ControllerBase
             {
                 Response.StatusCode = 500;
                 Response.ContentType = "application/json";
-                await Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new { error = new { message = ex.Message, type = "proxy_error" } }));
+                await Response.WriteAsync(JsonSerializer.Serialize(new { 
+                        error = new { 
+                            message = ex.Message, 
+                            type = "proxy_error" }}));
             }
         }
     }
 
     [HttpPost("chat/completions")]
-    public async Task ProxyChatCompletions()
+    [Consumes("application/json")]
+    public async Task ProxyChatCompletions(
+        [FromHeader(Name = "Authorization")] string? authorization,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] JsonElement? body)
     {
+        if (!string.IsNullOrWhiteSpace(authorization))
+        {
+            if (!authorization.StartsWith("Bearer "))
+                authorization = "Bearer " + authorization;
+            Request.Headers["Authorization"] = authorization;
+        }
+
         try
         {
-            // Extract model from body for metrics
-            Request.EnableBuffering();
-            var bodyText = await new StreamReader(Request.Body).ReadToEndAsync();
-            Request.Body.Position = 0;
-
+            string bodyText = string.Empty;
             string model = "gpt-3.5-turbo";
             bool isStreaming = false;
 
-            try
+            if (body is JsonElement jsonBody)
             {
-                using var doc = System.Text.Json.JsonDocument.Parse(bodyText);
-                if (doc.RootElement.TryGetProperty("model", out var modelProp))
-                    model = modelProp.GetString() ?? "gpt-3.5-turbo";
-                if (doc.RootElement.TryGetProperty("stream", out var streamProp))
-                    isStreaming = streamProp.GetBoolean();
+                bodyText = jsonBody.GetRawText();
+
+                try
+                {
+                    if (jsonBody.ValueKind == JsonValueKind.Object)
+                    {
+                        if (jsonBody.TryGetProperty("model", out var modelProp))
+                            model = modelProp.GetString() ?? model;
+                        if (jsonBody.TryGetProperty("stream", out var streamProp))
+                            isStreaming = streamProp.GetBoolean();
+                    }
+                }
+                catch { /* ignore parse errors, use defaults */ }
             }
-            catch { /* ignore parse errors, use defaults */ }
 
             // Rebuild the original request message for full passthrough
             var requestMessage = new HttpRequestMessage(HttpMethod.Post, Request.Path + Request.QueryString)
@@ -161,7 +195,7 @@ public class OpenAIController : ControllerBase
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
                 // Convert Python-style booleans (True/False) to JSON-style (true/false)
-                responseContent = copilot_auto_byok.Services.BooleanConvertStream.ConvertPythonBooleans(responseContent);
+                responseContent = BooleanConvertStream.ConvertPythonBooleans(responseContent);
                 await Response.WriteAsync(responseContent);
                 await Response.Body.FlushAsync();
                 return;
@@ -187,7 +221,10 @@ public class OpenAIController : ControllerBase
             {
                 Response.StatusCode = 500;
                 Response.ContentType = "application/json";
-                await Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new { error = new { message = ex.Message, type = "proxy_error" } }));
+                await Response.WriteAsync(JsonSerializer.Serialize(new { 
+                    error = new { 
+                        message = ex.Message, 
+                        type = "proxy_error" }}));
             }
         }
     }

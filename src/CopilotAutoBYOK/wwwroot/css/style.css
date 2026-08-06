@@ -705,20 +705,65 @@ body {
     border-bottom: 1px solid var(--border-default);
 }
 
-.byok-examples {
+.byok-example-tabs {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-1);
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.byok-example-tab {
+    position: relative;
+    flex: 0 0 auto;
+    padding: var(--space-2) var(--space-4);
+    border: none;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.byok-example-tab:hover {
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.byok-example-tab.active {
+    color: var(--accent);
+}
+
+.byok-example-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: var(--space-2);
+    right: var(--space-2);
+    height: 2px;
+    background: var(--accent);
+    border-radius: 2px 2px 0 0;
+}
+
+.byok-examples {
     margin-bottom: var(--space-5);
 }
 
 .byok-example {
     position: relative;
+    min-height: 156px;
     background: var(--bg-base);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
     padding: var(--space-4);
-    padding-right: 44px;
+    padding-right: 52px;
+}
+
+.byok-example[hidden] {
+    display: none;
 }
 
 .byok-example-label {
@@ -837,6 +882,19 @@ body {
     padding-top: var(--space-5);
     margin-top: var(--space-4);
     border-top: 1px solid var(--border-default);
+}
+
+/* ── Example Panels ────────────────────────────────────────── */
+.example-panels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+    align-items: start;
+}
+
+.example-panel {
+    min-width: 0;
+    margin-bottom: 0;
 }
 
 /* ── Code Tabs & Panels ────────────────────────────────────── */
@@ -1833,6 +1891,12 @@ textarea {
 }
 
 /* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+    .example-panels {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 768px) {
     .sidebar {
         width: 64px;

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using copilot_auto_byok.Services;
+using System.Text.Json;
 
 namespace copilot_auto_byok.Controllers;
 
@@ -17,26 +18,39 @@ public class AnthropicController : ControllerBase
     }
 
     [HttpPost("messages")]
-    public async Task ProxyMessages()
+    [Consumes("application/json")]
+    public async Task ProxyMessages(
+        [FromHeader(Name = "Authorization")] string? authorization,
+        [FromHeader(Name = "x-api-key")] string? apiKey,
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] JsonElement? body)
     {
+        if (!string.IsNullOrWhiteSpace(authorization))
+            Request.Headers["Authorization"] = authorization;
+        if (!string.IsNullOrWhiteSpace(apiKey))
+            Request.Headers["x-api-key"] = apiKey;
+
         try
         {
-            Request.EnableBuffering();
-            var bodyText = await new StreamReader(Request.Body).ReadToEndAsync();
-            Request.Body.Position = 0;
-
+            string bodyText = string.Empty;
             string model = "claude-3-sonnet-20240229";
             bool isStreaming = false;
 
-            try
+            if (body is JsonElement jsonBody)
             {
-                using var doc = System.Text.Json.JsonDocument.Parse(bodyText);
-                if (doc.RootElement.TryGetProperty("model", out var modelProp))
-                    model = modelProp.GetString() ?? "claude-3-sonnet-20240229";
-                if (doc.RootElement.TryGetProperty("stream", out var streamProp))
-                    isStreaming = streamProp.GetBoolean();
+                bodyText = jsonBody.GetRawText();
+
+                try
+                {
+                    if (jsonBody.ValueKind == JsonValueKind.Object)
+                    {
+                        if (jsonBody.TryGetProperty("model", out var modelProp))
+                            model = modelProp.GetString() ?? model;
+                        if (jsonBody.TryGetProperty("stream", out var streamProp))
+                            isStreaming = streamProp.GetBoolean();
+                    }
+                }
+                catch { /* ignore parse errors, use defaults */ }
             }
-            catch { /* ignore parse errors, use defaults */ }
 
             // Rebuild the original request message for full passthrough
             var requestMessage = new HttpRequestMessage(HttpMethod.Post, Request.Path + Request.QueryString)

@@ -42,6 +42,12 @@
                     </svg>
                     <span>指标监控</span>
                 </button>
+                <button class="nav-item" data-tab="api-test">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                    </svg>
+                    <span>API 测试</span>
+                </button>
             </nav>
             <div class="sidebar-footer">
                 <span class="version" id="app-version">v1.0.0</span>
@@ -235,7 +241,7 @@
                                     <span class="byok-badge required">推荐</span>
                                 </label>
                                 <input type="text" id="byok-model" name="model" value="auto-copilot" placeholder="auto-copilot">
-                                <span class="byok-form-hint">可使用 auto-copilot，或显式实体模型名 providerName,modelName；该值同时作为 MODEL_ID 的默认值</span>
+                                <span class="byok-form-hint">可使用 auto-copilot 或显式实体模型名 'provider,model'；该值同时作为 MODEL_ID 的默认值</span>
                             </div>
                             <div class="byok-form-group">
                                 <label for="byok-providerModelId">
@@ -283,11 +289,25 @@
                             <span id="byokSaveStatus" class="status-msg"></span>
                         </div>
                     </form>
+                </div>
 
-                    <div class="byok-section-title">快速示例</div>
+                <div class="example-panels">
+                    <div class="card example-panel">
+                        <h3>
+                            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                            </svg>
+                            Console 示例
+                        </h3>
+                    <div class="byok-example-tabs" role="tablist" aria-label="快速示例">
+                        <button class="byok-example-tab active" type="button" role="tab" aria-selected="true" data-example="ollama">Ollama</button>
+                        <button class="byok-example-tab" type="button" role="tab" aria-selected="false" data-example="openai">OpenAI</button>
+                        <button class="byok-example-tab" type="button" role="tab" aria-selected="false" data-example="azure">Azure OpenAI</button>
+                        <button class="byok-example-tab" type="button" role="tab" aria-selected="false" data-example="anthropic">Anthropic</button>
+                    </div>
                     <div class="byok-examples">
-                        <div class="byok-example">
-                            <div class="byok-example-label">Ollama（本地，无需 API key）</div>
+                        <div id="byok-example-ollama" class="byok-example active" role="tabpanel">
+                            <div class="byok-example-label">本地运行，无需 API key</div>
                             <pre><code>COPILOT_PROVIDER_BASE_URL=http://localhost:11434/v1 \
   COPILOT_MODEL=deepseek-coder-v2:16b \
   copilot</code></pre>
@@ -297,7 +317,7 @@
                                 </svg>
                             </button>
                         </div>
-                        <div class="byok-example">
+                        <div id="byok-example-openai" class="byok-example" role="tabpanel" hidden>
                             <div class="byok-example-label">自定义 OpenAI 兼容端点</div>
                             <pre><code>COPILOT_PROVIDER_BASE_URL=https://my-api.example.com/v1 \
   COPILOT_PROVIDER_API_KEY=sk-... \
@@ -309,8 +329,8 @@
                                 </svg>
                             </button>
                         </div>
-                        <div class="byok-example">
-                            <div class="byok-example-label">Azure OpenAI（自定义 wire model）</div>
+                        <div id="byok-example-azure" class="byok-example" role="tabpanel" hidden>
+                            <div class="byok-example-label">自定义 wire model</div>
                             <pre><code>COPILOT_PROVIDER_TYPE=azure \
   COPILOT_PROVIDER_BASE_URL=https://my-resource.openai.azure.com \
   COPILOT_PROVIDER_API_KEY=your-key-here \
@@ -323,8 +343,8 @@
                                 </svg>
                             </button>
                         </div>
-                        <div class="byok-example">
-                            <div class="byok-example-label">Anthropic</div>
+                        <div id="byok-example-anthropic" class="byok-example" role="tabpanel" hidden>
+                            <div class="byok-example-label">Anthropic API</div>
                             <pre><code>COPILOT_PROVIDER_TYPE=anthropic \
   COPILOT_PROVIDER_BASE_URL=https://api.anthropic.com \
   COPILOT_PROVIDER_API_KEY=sk-ant-... \
@@ -340,12 +360,12 @@
                 </div>
 
                 <!-- 调用示例 -->
-                <div class="card">
+                <div class="card example-panel">
                     <h3>
                         <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
                         </svg>
-                        调用示例
+                        WebAPI 调用示例
                     </h3>
                     <div class="code-tabs">
                         <button class="code-tab active" data-lang="openai">OpenAI 协议</button>
@@ -369,6 +389,7 @@
     "messages": [{"role": "user", "content": "你好！"}],
     "max_tokens": 1024
   }'</code></pre>
+                    </div>
                     </div>
                 </div>
             </section>
@@ -437,6 +458,16 @@
                     <h3>暂无访问密钥</h3>
                     <p>添加密钥后，客户端需携带密钥才能访问代理端点</p>
                 </div>
+            </section>
+
+            <!-- API 测试 Tab -->
+            <section id="api-test" class="tab-content">
+                <iframe
+                    src="/swagger/index.html"
+                    title="API 测试"
+                    style="display:block;width:100%;height:calc(100vh - 48px);border:0;background:#fff;"
+                    loading="lazy">
+                </iframe>
             </section>
 
             <!-- 指标监控 Tab -->

@@ -3,7 +3,10 @@ using copilot_auto_byok.Middleware;
 using copilot_auto_byok.Models;
 using copilot_auto_byok.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
+using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Net;
+using System.Text.Json.Nodes;
 #if DEBUG
 // Run boolean conversion tests if --test flag is passed
 if (args.Contains("--test"))
@@ -17,6 +20,11 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services
 builder.Services.AddMemoryCache();
 builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.OperationFilter<HeaderParameterOperationFilter>();
+});
 // Configure the proxy HttpClient with automatic decompression so upstream
 // gzip/deflate/brotli responses are transparently decoded. Without this the
 // proxy would forward compressed bytes as if they were plaintext and the
@@ -87,6 +95,15 @@ app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "CopilotAutoBYOK API v1");
+    options.RoutePrefix = "swagger";
+    options.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
+    options.InjectJavascript("/js/swagger-ui.js");
+});
+
 // Auth middleware
 app.UseMiddleware<AuthMiddleware>();
 
@@ -133,5 +150,94 @@ static void MigrateJsonToSqlite(string configPath, IConfigService configService)
     catch
     {
         // Ignore migration errors
+    }
+}
+
+internal sealed class HeaderParameterOperationFilter : IOperationFilter
+{
+    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    {
+        var path = context.ApiDescription.RelativePath ?? string.Empty;
+
+        if (path.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+        {
+            AddHeaderParameter(operation, "Authorization", "Bearer token for the OpenAI-compatible API");
+            SetRequestBodyExample(operation, """
+                {
+                  "model": "auto-copilot",
+                  "messages": [
+                    {
+                      "role": "user",
+                      "content": "who are you?"
+                    }
+                  ],
+                  "stream": false
+                }
+                """);
+        }
+
+        if (path.EndsWith("/responses", StringComparison.OrdinalIgnoreCase))
+        {
+            AddHeaderParameter(operation, "Authorization", "Bearer token for the OpenAI-compatible API");
+            SetRequestBodyExample(operation, """
+                {
+                    "model": "auto-copilot",
+                    "instructions": "You are an AI assistant developed by OpenAI. Today is date: 2026-08-05. Your knowledge cutoff date is December 2025.",
+                    "input": "who are you?",
+                    "max_output_tokens": 1024,
+                    "stream": false,
+                    "reasoning": {
+                        "effort": "none"
+                    }
+                }
+                """);
+        }
+
+        if (path.EndsWith("/messages", StringComparison.OrdinalIgnoreCase))
+        {
+            AddHeaderParameter(operation, "x-api-key", "API key for the Anthropic-compatible API");
+            SetRequestBodyExample(operation, """
+                {
+                  "model": "auto-copilot",
+                  "max_tokens": 1024,
+                  "messages": [
+                    {
+                      "role": "user",
+                      "content": "who are you?"
+                    }
+                  ],
+                  "stream": false
+                }
+                """);
+        }
+    }
+
+    private static void SetRequestBodyExample(OpenApiOperation operation, string json)
+    {
+        if (operation.RequestBody?.Content == null ||
+            !operation.RequestBody.Content.TryGetValue("application/json", out var mediaType))
+            return;
+
+        mediaType.Schema = new OpenApiSchema { Type = JsonSchemaType.Object };
+        mediaType.Example = JsonNode.Parse(json);
+    }
+
+    private static void AddHeaderParameter(OpenApiOperation operation, string name, string description)
+    {
+        if (operation == null || operation.Parameters == null) return;
+
+        if (operation.Parameters.Any(p => 
+                string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) && 
+                p.In == ParameterLocation.Header))
+            return;
+
+        operation.Parameters.Add(new OpenApiParameter
+        {
+            Name = name,
+            In = ParameterLocation.Header,
+            Description = description,
+            Required = false,
+            Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+        });
     }
 }
