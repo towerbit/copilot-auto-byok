@@ -23,10 +23,10 @@ using System.Text.Json;
 
 namespace copilot_auto_byok.Services;
 
-public interface IProxyService
-{
-    Task<HttpResponseMessage> ForwardAsync(HttpRequestMessage request, string pathAndQuery, string bodyText, string protocol, string requestedModel, bool isStreaming);
-}
+    public interface IProxyService
+    {
+        Task<HttpResponseMessage> ForwardAsync(HttpRequestMessage request, string pathAndQuery, string bodyText, string protocol, string requestedModel, bool isStreaming);
+    }
 
 /// <summary>
 /// A stream wrapper that converts Python-style booleans (True/False) to JSON-style (true/false).
@@ -829,7 +829,10 @@ public class ProxyService : IProxyService
             var response = await client.SendAsync(forwardRequest, HttpCompletionOption.ResponseHeadersRead);
             metrics.LatencyMs = stopwatch.ElapsedMilliseconds;
             metrics.StatusCode = (int)response.StatusCode;
-
+#if STRIP_REASONING_CONTENT
+            // 仅对 copilot 调用 mimo 的 chat 特殊裁剪，不干预 responses
+            bool isChat = pathAndQuery.Contains("/chat/", StringComparison.OrdinalIgnoreCase);
+#endif
             // Process response
             if (isStreaming)
             {
@@ -840,7 +843,7 @@ public class ProxyService : IProxyService
                     originalStream, targetProviderType, metrics, stopwatch, _metricsService, _logger, response.IsSuccessStatusCode);
 
 #if STRIP_REASONING_CONTENT
-                if (ShouldStripReasoningContent(targetModel))
+                if (isChat && ShouldStripReasoningContent(targetModel))
                 {
                     var stripStream = new ReasoningContentStripStream(teeStream);
                     var booleanConvertStream = new BooleanConvertStream(stripStream);
@@ -872,7 +875,7 @@ public class ProxyService : IProxyService
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
 #if STRIP_REASONING_CONTENT
-                if (ShouldStripReasoningContent(targetModel))
+                if (isChat && ShouldStripReasoningContent(targetModel))
                 {
                     responseContent = StripReasoningContentFromJsonString(responseContent);
                 }
