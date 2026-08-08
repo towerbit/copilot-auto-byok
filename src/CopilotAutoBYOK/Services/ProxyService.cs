@@ -639,18 +639,52 @@ internal class MetricsCollectingStream : Stream
                         type.GetString() == "message_delta" &&
                         doc.RootElement.TryGetProperty("usage", out var usage))
                     {
+                        // message_delta 是最终统计，以这里为准
                         if (usage.TryGetProperty("output_tokens", out var ot))
                             metrics.CompletionTokens = ot.GetInt32();
+                        if (usage.TryGetProperty("input_tokens", out var it))
+                            metrics.PromptTokens = it.GetInt32();
+                        if (usage.TryGetProperty("cache_read_input_tokens", out var cr))
+                        {
+                            metrics.CachedTokens = cr.GetInt32();
+                            metrics.IsCacheHit = metrics.CachedTokens > 0;
+                        }
                         metrics.TotalTokens = metrics.PromptTokens + metrics.CompletionTokens;
                     }
                     if (doc.RootElement.TryGetProperty("type", out var type2) &&
-                        type2.GetString() == "message_start" &&
-                        doc.RootElement.TryGetProperty("message", out var message) &&
-                        message.TryGetProperty("usage", out var usage2))
+                        type2.GetString() == "message_start")
                     {
-                        if (usage2.TryGetProperty("input_tokens", out var it))
-                            metrics.PromptTokens = it.GetInt32();
-                        metrics.TotalTokens = metrics.PromptTokens + metrics.CompletionTokens;
+                        // message_start 里的 usage 经常是全 0 的占位数据，
+                        // 只在 message_delta 没提供 input_tokens 时作为 fallback
+                        JsonElement usageSource;
+                        if (doc.RootElement.TryGetProperty("message", out var message) &&
+                            message.TryGetProperty("usage", out var messageUsage))
+                        {
+                            usageSource = messageUsage;
+                        }
+                        else if (doc.RootElement.TryGetProperty("usage", out var rootUsage))
+                        {
+                            usageSource = rootUsage;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+
+                        if (metrics.PromptTokens == 0 &&
+                            usageSource.TryGetProperty("input_tokens", out var it2) &&
+                            it2.GetInt32() > 0)
+                        {
+                            metrics.PromptTokens = it2.GetInt32();
+                            metrics.TotalTokens = metrics.PromptTokens + metrics.CompletionTokens;
+                        }
+                        if (!metrics.IsCacheHit &&
+                            usageSource.TryGetProperty("cache_read_input_tokens", out var cr2) &&
+                            cr2.GetInt32() > 0)
+                        {
+                            metrics.CachedTokens = cr2.GetInt32();
+                            metrics.IsCacheHit = true;
+                        }
                     }
                 }
             }
