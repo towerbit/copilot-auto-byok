@@ -176,7 +176,7 @@ async function loadHourlyCharts() {
         const response = await fetch(`/api/metrics/hourly?period=${currentPeriod}`);
         const data = await response.json();
 
-        const hours = data.hours;
+        const hours = buildHourlyLabels(data.hours.length);
         const series = data.series;
 
         const makeDataset = (propFn) => series.map((s, i) => ({
@@ -312,9 +312,9 @@ async function loadRequestLog(page = 1) {
         if (data.data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="11" class="empty-cell">暂无数据</td></tr>';
         } else {
-            tbody.innerHTML = data.data.map(r => `
+                tbody.innerHTML = data.data.map(r => `
                 <tr>
-                    <td>${new Date(r.timestamp).toLocaleString('zh-CN')}</td>
+                    <td>${formatLocalDateTime(r.timestamp)}</td>
                     <td>${escapeHtml(r.requestedModel)}</td>
                     <td>${escapeHtml(r.actualModel)}</td>
                     <td>${escapeHtml(r.provider)}</td>
@@ -382,6 +382,71 @@ function formatNumber(num) {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
     return num?.toString() || '0';
+}
+
+function buildHourlyLabels(count) {
+    const labels = [];
+    const now = new Date();
+    const currentHour = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        now.getUTCHours(),
+        0, 0
+    ));
+    const start = new Date(currentHour);
+    start.setUTCHours(start.getUTCHours() - Math.max(0, count - 1));
+
+    for (let i = 0; i < count; i++) {
+        const utcHour = new Date(start);
+        utcHour.setUTCHours(start.getUTCHours() + i);
+        labels.push(formatLocalHour(utcHour));
+    }
+
+    return labels;
+}
+
+function formatLocalHour(date) {
+    return new Intl.DateTimeFormat('zh-CN', {
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    }).format(date).replace(/^24:/, '00:');
+}
+
+function formatLocalDateTime(value) {
+    const date = parseUtcDate(value);
+    if (!date) return escapeHtml(String(value));
+
+    return new Intl.DateTimeFormat('zh-CN', {
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).format(date).replace(/^24:/, '00:');
+}
+
+function parseUtcDate(value) {
+    if (!value) return null;
+
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+    }
+
+    const text = String(value).trim();
+    if (!text) return null;
+
+    const normalized = /z$/i.test(text) || /[+-]\d{2}:?\d{2}$/.test(text)
+        ? text
+        : text.replace(' ', 'T') + 'Z';
+
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function escapeHtml(text) {
