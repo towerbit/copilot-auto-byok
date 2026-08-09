@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using copilot_auto_byok.Services;
 using copilot_auto_byok.Models;
+using System;
 using System.Reflection;
 
 namespace copilot_auto_byok.Controllers;
@@ -193,6 +194,7 @@ public class AdminController : ControllerBase
         return Ok(new { message = "AutoCopilot binding updated" });
     }
 
+    [Obsolete("访问密钥功能已弃用，不再从 UI 暴露，仅保留接口兼容性。")]
     [HttpGet("keys")]
     public IActionResult GetApiKeys()
     {
@@ -200,6 +202,7 @@ public class AdminController : ControllerBase
         return Ok(keys.Select(k => new { k.Id, k.Name, k.CreatedAt }));
     }
 
+    [Obsolete("访问密钥功能已弃用，不再从 UI 暴露，仅保留接口兼容性。")]
     [HttpPost("keys")]
     public IActionResult AddApiKey([FromBody] ApiKeyConfig key)
     {
@@ -212,6 +215,7 @@ public class AdminController : ControllerBase
         return Ok(new { key.Id, key.Name, key.CreatedAt });
     }
 
+    [Obsolete("访问密钥功能已弃用，不再从 UI 暴露，仅保留接口兼容性。")]
     [HttpDelete("keys/{id}")]
     public IActionResult RemoveApiKey(string id)
     {

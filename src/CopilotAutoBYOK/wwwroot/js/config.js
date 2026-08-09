@@ -14,24 +14,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadConfig() {
     try {
-        const [configRes, providersRes, autocopilotRes, keysRes, byokRes] = await Promise.all([
+        //const [configRes, providersRes, autocopilotRes, keysRes, byokRes] = await Promise.all([
+        const [configRes, providersRes, autocopilotRes, byokRes] = await Promise.all([
             fetch(`${API_BASE}/config`),
             fetch(`${API_BASE}/providers`),
             fetch(`${API_BASE}/autocopilot`),
-            fetch(`${API_BASE}/keys`),
+            //fetch(`${API_BASE}/keys`),
             fetch(`${API_BASE}/byok`)
         ]);
 
         config = await configRes.json();
         providers = await providersRes.json();
         autocopilot = await autocopilotRes.json();
-        apiKeys = await keysRes.json();
+        //apiKeys = await keysRes.json();
         byokEnv = await byokRes.json();
 
         renderProviders();
         renderAutoCopilot();
         updateAutoCopilotBindingSummary();
-        renderApiKeys();
+        //renderApiKeys();
         renderConnectionInfo();
         renderByokForm();
     } catch (err) {
@@ -672,6 +673,7 @@ async function switchAutoCopilotModel(type) {
 }
 
 // ===== API Keys =====
+/* 与 访问密钥 相关，包括渲染列表、添加、删除等操作，暂时停用
 function renderApiKeys() {
     const list = document.getElementById('keysList');
     if (!list) return;
@@ -785,6 +787,7 @@ async function deleteApiKey(id) {
         showToast('删除失败: ' + err.message, 'error');
     }
 }
+*/
 
 // ===== BYOK Form =====
 function renderByokForm() {
