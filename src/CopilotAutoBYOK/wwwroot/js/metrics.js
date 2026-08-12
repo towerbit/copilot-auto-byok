@@ -20,6 +20,10 @@ document.querySelectorAll('.nav-item').forEach(btn => {
         if (tab === 'metrics') {
             loadMetrics();
         }
+
+        if (tab === "logs") {
+            loadLogs();
+        }
     });
 });
 
@@ -33,13 +37,20 @@ document.querySelectorAll('.period-btn').forEach(btn => {
     });
 });
 
+async function loadLogs() {
+    await Promise.all([
+        loadModelFilter(),
+        loadRequestLog()
+    ]);
+}
+
 async function loadMetrics() {
     await Promise.all([
         loadSummary(),
         loadCharts(),
         loadHourlyCharts(),
-        loadModelFilter(),
-        loadRequestLog()
+        // loadModelFilter(),
+        // loadRequestLog()
     ]);
 }
 
@@ -323,7 +334,7 @@ async function loadRequestLog(page = 1) {
                     <td>${formatNumber(r.cachedTokens || 0)}</td>
                     <td>${r.latencyMs}ms</td>
                     <td>${r.tokensPerSecond}</td>
-                    <td>$${r.estimatedCost?.toFixed(4) || '0'}</td>
+                    <!--<td>$${r.estimatedCost?.toFixed(4) || '0'}</td>-->
                     <td><span class="status-badge ${r.isSuccess ? 'success' : 'error'}">${r.isSuccess ? '✓' : '✗'}</span></td>
                 </tr>
             `).join('');

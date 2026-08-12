@@ -20,13 +20,16 @@
             <nav class="sidebar-nav">
                 <button class="nav-item active" data-tab="workbench">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>
+                        <rect x="2" y="3" width="20" height="14" rx="2" />
+                        <path d="M8 21h8" />
+                        <path d="M12 17v4" />
                     </svg>
                     <span>工作台</span>
                 </button>
                 <button class="nav-item" data-tab="providers">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                     </svg>
                     <span>提供商管理</span>
                 </button>
@@ -40,13 +43,25 @@
                 -->
                 <button class="nav-item" data-tab="metrics">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>
+                        <path d="M18 20V10" />
+                        <path d="M12 20V4" />
+                        <path d="M6 20v-6" />
                     </svg>
                     <span>指标监控</span>
                 </button>
+                <button class="nav-item" data-tab="logs">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                    </svg>
+                    <span>请求日志</span>
+                </button>
                 <button class="nav-item" data-tab="api-test">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                        <polyline points="16 18 22 12 16 6" />
+                        <polyline points="8 6 2 12 8 18" />
                     </svg>
                     <span>API 测试</span>
                 </button>
@@ -71,7 +86,9 @@
                 <div class="connection-card">
                     <h3>
                         <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>
+                            <path d="M4 11a9 9 0 0 1 9 9" />
+                            <path d="M4 4a16 16 0 0 1 16 16" />
+                            <circle cx="5" cy="19" r="1" />
                         </svg>
                         连接信息
                     </h3>
@@ -82,7 +99,8 @@
                                 <code id="openaiUrl">http://localhost:5267/v1</code>
                                 <button onclick="copyToClipboard('openaiUrl')" class="btn-icon" title="复制">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                                     </svg>
                                 </button>
                             </div>
@@ -93,7 +111,8 @@
                                 <code id="anthropicUrl">http://localhost:5267/v1</code>
                                 <button onclick="copyToClipboard('anthropicUrl')" class="btn-icon" title="复制">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                                     </svg>
                                 </button>
                             </div>
@@ -106,7 +125,9 @@
                     <div class="model-binding-main">
                         <div class="model-binding-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                <path d="M2 17l10 5 10-5" />
+                                <path d="M2 12l10 5 10-5" />
                             </svg>
                         </div>
                         <div class="model-binding-info">
@@ -115,7 +136,8 @@
                                 <code id="proxyModel">auto-copilot</code>
                                 <button onclick="copyText('auto-copilot')" class="btn-icon" title="复制">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                                     </svg>
                                 </button>
                             </div>
@@ -134,7 +156,7 @@
                                     <option value="">请先配置 OpenAI 提供商</option>
                                 </select>
                                 <svg class="fluent-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="6 9 12 15 18 9"/>
+                                    <polyline points="6 9 12 15 18 9" />
                                 </svg>
                             </div>
                         </div>
@@ -145,7 +167,7 @@
                                     <option value="">请先配置 Anthropic 提供商</option>
                                 </select>
                                 <svg class="fluent-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="6 9 12 15 18 9"/>
+                                    <polyline points="6 9 12 15 18 9" />
                                 </svg>
                             </div>
                         </div>
@@ -157,9 +179,9 @@
                 <div class="card byok-card">
                     <h3>
                         <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                            <line x1="12" y1="22.08" x2="12" y2="12" />
                         </svg>
                         Copilot BYOK 环境变量
                     </h3>
@@ -188,7 +210,7 @@
                                         <option value="anthropic">anthropic</option>
                                     </select>
                                     <svg class="fluent-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="6 9 12 15 18 9"/>
+                                        <polyline points="6 9 12 15 18 9" />
                                     </svg>
                                 </div>
                                 <span class="byok-form-hint">openai（默认）/ azure / anthropic</span>
@@ -220,7 +242,7 @@
                                         <option value="responses">responses</option>
                                     </select>
                                     <svg class="fluent-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="6 9 12 15 18 9"/>
+                                        <polyline points="6 9 12 15 18 9" />
                                     </svg>
                                 </div>
                                 <span class="byok-form-hint">completions（默认）或 responses，GPT-5 系列用 responses</span>
@@ -282,9 +304,9 @@
                         <div class="byok-form-actions">
                             <button type="submit" class="btn btn-primary">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
-                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                                    <polyline points="17 21 17 13 7 13 7 21"/>
-                                    <polyline points="7 3 7 8 15 8"/>
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                                    <polyline points="17 21 17 13 7 13 7 21" />
+                                    <polyline points="7 3 7 8 15 8" />
                                 </svg>
                                 保存配置
                             </button>
@@ -297,93 +319,99 @@
                     <div class="card example-panel">
                         <h3>
                             <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                                <polyline points="16 18 22 12 16 6" />
+                                <polyline points="8 6 2 12 8 18" />
                             </svg>
                             Console 示例
                         </h3>
-                    <div class="byok-example-tabs" role="tablist" aria-label="快速示例">
-                        <button class="byok-example-tab active" type="button" role="tab" aria-selected="true" data-example="ollama">Ollama</button>
-                        <button class="byok-example-tab" type="button" role="tab" aria-selected="false" data-example="openai">OpenAI</button>
-                        <button class="byok-example-tab" type="button" role="tab" aria-selected="false" data-example="azure">Azure OpenAI</button>
-                        <button class="byok-example-tab" type="button" role="tab" aria-selected="false" data-example="anthropic">Anthropic</button>
-                    </div>
-                    <div class="byok-examples">
-                        <div id="byok-example-ollama" class="byok-example active" role="tabpanel">
-                            <div class="byok-example-label">本地运行，无需 API key</div>
-                            <pre><code>COPILOT_PROVIDER_BASE_URL=http://localhost:11434/v1 \
+                        <div class="byok-example-tabs" role="tablist" aria-label="快速示例">
+                            <button class="byok-example-tab active" type="button" role="tab" aria-selected="true" data-example="ollama">Ollama</button>
+                            <button class="byok-example-tab" type="button" role="tab" aria-selected="false" data-example="openai">OpenAI</button>
+                            <button class="byok-example-tab" type="button" role="tab" aria-selected="false" data-example="azure">Azure OpenAI</button>
+                            <button class="byok-example-tab" type="button" role="tab" aria-selected="false" data-example="anthropic">Anthropic</button>
+                        </div>
+                        <div class="byok-examples">
+                            <div id="byok-example-ollama" class="byok-example active" role="tabpanel">
+                                <div class="byok-example-label">本地运行，无需 API key</div>
+                                <pre><code>COPILOT_PROVIDER_BASE_URL=http://localhost:11434/v1 \
   COPILOT_MODEL=deepseek-coder-v2:16b \
   copilot</code></pre>
-                            <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div id="byok-example-openai" class="byok-example" role="tabpanel" hidden>
-                            <div class="byok-example-label">自定义 OpenAI 兼容端点</div>
-                            <pre><code>COPILOT_PROVIDER_BASE_URL=https://my-api.example.com/v1 \
+                                <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="byok-example-openai" class="byok-example" role="tabpanel" hidden>
+                                <div class="byok-example-label">自定义 OpenAI 兼容端点</div>
+                                <pre><code>COPILOT_PROVIDER_BASE_URL=https://my-api.example.com/v1 \
   COPILOT_PROVIDER_API_KEY=sk-... \
   COPILOT_MODEL=gpt-4 \
   copilot</code></pre>
-                            <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div id="byok-example-azure" class="byok-example" role="tabpanel" hidden>
-                            <div class="byok-example-label">自定义 wire model</div>
-                            <pre><code>COPILOT_PROVIDER_TYPE=azure \
+                                <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="byok-example-azure" class="byok-example" role="tabpanel" hidden>
+                                <div class="byok-example-label">自定义 wire model</div>
+                                <pre><code>COPILOT_PROVIDER_TYPE=azure \
   COPILOT_PROVIDER_BASE_URL=https://my-resource.openai.azure.com \
   COPILOT_PROVIDER_API_KEY=your-key-here \
   COPILOT_PROVIDER_MODEL_ID=gpt-4 \
   COPILOT_PROVIDER_WIRE_MODEL=my-gpt4-deployment \
   copilot</code></pre>
-                            <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <div id="byok-example-anthropic" class="byok-example" role="tabpanel" hidden>
-                            <div class="byok-example-label">Anthropic API</div>
-                            <pre><code>COPILOT_PROVIDER_TYPE=anthropic \
+                                <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="byok-example-anthropic" class="byok-example" role="tabpanel" hidden>
+                                <div class="byok-example-label">Anthropic API</div>
+                                <pre><code>COPILOT_PROVIDER_TYPE=anthropic \
   COPILOT_PROVIDER_BASE_URL=https://api.anthropic.com \
   COPILOT_PROVIDER_API_KEY=sk-ant-... \
   COPILOT_MODEL=claude-sonnet-4-20250514 \
   copilot</code></pre>
-                            <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                </svg>
-                            </button>
+                                <button onclick="copyText(this.closest('.byok-example').querySelector('code').textContent)" class="btn-icon byok-example-copy" title="复制">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- 调用示例 -->
-                <div class="card example-panel">
-                    <h3>
-                        <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
-                        </svg>
-                        WebAPI 调用示例
-                    </h3>
-                    <div class="code-tabs">
-                        <button class="code-tab active" data-lang="openai">OpenAI 协议</button>
-                        <button class="code-tab" data-lang="anthropic">Anthropic 协议</button>
-                    </div>
-                    <div class="code-panel" id="code-openai">
-                        <pre><code>curl http://localhost:5267/v1/chat/completions \
+                    <!-- 调用示例 -->
+                    <div class="card example-panel">
+                        <h3>
+                            <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="16 18 22 12 16 6" />
+                                <polyline points="8 6 2 12 8 18" />
+                            </svg>
+                            WebAPI 调用示例
+                        </h3>
+                        <div class="code-tabs">
+                            <button class="code-tab active" data-lang="openai">OpenAI 协议</button>
+                            <button class="code-tab" data-lang="anthropic">Anthropic 协议</button>
+                        </div>
+                        <div class="code-panel" id="code-openai">
+                            <pre><code>curl http://localhost:5267/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
     "model": "auto-copilot",
     "messages": [{"role": "user", "content": "你好！"}]
   }'</code></pre>
-                    </div>
-                    <div class="code-panel" id="code-anthropic" style="display:none;">
-                        <pre><code>curl http://localhost:5267/v1/messages \
+                        </div>
+                        <div class="code-panel" id="code-anthropic" style="display:none;">
+                            <pre><code>curl http://localhost:5267/v1/messages \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -391,7 +419,7 @@
     "messages": [{"role": "user", "content": "你好！"}],
     "max_tokens": 1024
   }'</code></pre>
-                    </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -405,7 +433,8 @@
                     </div>
                     <button onclick="showAddProviderDialog()" class="btn btn-primary">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
-                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
                         </svg>
                         添加提供商
                     </button>
@@ -464,11 +493,10 @@
             -->
             <!-- API 测试 Tab -->
             <section id="api-test" class="tab-content">
-                <iframe
-                    src="/swagger/index.html"
-                    title="API 测试"
-                    style="display:block;width:100%;height:calc(100vh - 48px);border:0;background:#fff;"
-                    loading="lazy">
+                <iframe src="/swagger/index.html"
+                        title="API 测试"
+                        style="display:block;width:100%;height:calc(100vh - 48px);border:0;background:#fff;"
+                        loading="lazy">
                 </iframe>
             </section>
 
@@ -488,13 +516,16 @@
                         </div>
                         <button onclick="exportCsv()" class="btn btn-secondary">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
                             导出
                         </button>
                         <button onclick="refreshMetrics()" class="btn btn-secondary">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
-                                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                                <polyline points="23 4 23 10 17 10" />
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
                             </svg>
                             刷新
                         </button>
@@ -505,7 +536,7 @@
                     <div class="stat-card">
                         <div class="stat-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -516,7 +547,8 @@
                     <div class="stat-card">
                         <div class="stat-icon success">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                <polyline points="22 4 12 14.01 9 11.01" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -527,7 +559,9 @@
                     <div class="stat-card">
                         <div class="stat-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>
+                                <path d="M4 7V4h16v3" />
+                                <path d="M9 20h6" />
+                                <path d="M12 4v16" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -538,7 +572,9 @@
                     <div class="stat-card">
                         <div class="stat-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2v16"/>
+                                <path d="M9 18h6" />
+                                <path d="M10 22h4" />
+                                <path d="M12 2v16" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -549,7 +585,9 @@
                     <div class="stat-card">
                         <div class="stat-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                                <polyline points="17 21 17 13 7 13 7 21" />
+                                <polyline points="7 3 7 8 15 8" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -557,7 +595,7 @@
                             <div class="stat-value" id="m-cached-tokens">-</div>
                         </div>
                     </div>
-                    <div class="stat-card">
+                    <!--<div class="stat-card">
                         <div class="stat-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
@@ -567,11 +605,12 @@
                             <div class="stat-label">预估费用</div>
                             <div class="stat-value" id="m-est-cost">-</div>
                         </div>
-                    </div>
+                    </div>-->
                     <div class="stat-card">
                         <div class="stat-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -582,7 +621,7 @@
                     <div class="stat-card">
                         <div class="stat-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                             </svg>
                         </div>
                         <div class="stat-info">
@@ -627,14 +666,15 @@
                         <canvas id="hourly-tps-chart"></canvas>
                     </div>
                 </div>
+            </section>
 
-                <div class="card">
-                    <h3>
-                        <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                        </svg>
-                        请求日志
-                    </h3>
+            <!-- 请求日志 -->
+            <section id="logs" class="tab-content">
+                <div class="page-header">
+                    <div>
+                        <h2>请求日志</h2>
+                        <p class="page-desc">查看代理端点的请求日志，支持搜索和筛选</p>
+                    </div>
                     <div class="log-toolbar">
                         <div class="fluent-select-wrapper" style="max-width: 220px">
                             <select id="log-filter" onchange="loadRequestLog(1)">
@@ -643,6 +683,8 @@
                         </div>
                         <button onclick="loadRequestLog(1)" class="btn btn-primary btn-sm">筛选</button>
                     </div>
+                </div>
+                <div class="card">
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
@@ -656,7 +698,7 @@
                                     <th>缓存 Token</th>
                                     <th>首字延迟</th>
                                     <th>速度 (TPS)</th>
-                                    <th>费用</th>
+                                    <!--<th>费用</th>-->
                                     <th>状态</th>
                                 </tr>
                             </thead>

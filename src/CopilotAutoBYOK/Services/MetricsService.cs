@@ -330,7 +330,12 @@ public class MetricsService : IMetricsService, IHostedService, IDisposable
         var allData = await context.RequestMetrics
             .AsNoTracking()
             .Where(r => r.Timestamp >= from)
-            .Select(r => new { r.Timestamp, r.ActualModel, r.Provider, r.TotalTokens, r.LatencyMs, r.TokensPerSecond, r.EstimatedCost })
+            .Select(r => new 
+            { 
+                r.Timestamp, r.ActualModel, r.Provider, 
+                r.TotalTokens, r.LatencyMs, r.TokensPerSecond, 
+                r.EstimatedCost 
+            })
             .ToListAsync();
 
         var modelKeys = new HashSet<string>();
@@ -398,7 +403,8 @@ public class MetricsService : IMetricsService, IHostedService, IDisposable
 
         return new HourlyMetricsResponse
         {
-            Hours = hours.Select(h => h.Substring(11, 2) + ":00").ToList(),
+            Hours = hours.Select(h => h.Substring(11, 2) + ":00")
+                         .ToList(),
             Series = series
         };
     }
@@ -408,7 +414,8 @@ public class MetricsService : IMetricsService, IHostedService, IDisposable
         using var context = await _contextFactory.CreateDbContextAsync();
         return await context.RequestMetrics
             .AsNoTracking()
-            .Where(r => r.ActualModel != null)
+            //.Where(r => r.ActualModel != null)
+            .Where(r => !string.IsNullOrEmpty(r.ActualModel))
             .Select(r => r.ActualModel)
             .Distinct()
             .OrderBy(m => m)
