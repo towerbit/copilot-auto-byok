@@ -239,9 +239,9 @@ public class AdminController : ControllerBase
     [HttpGet("version")]
     public IActionResult GetVersion()
     {
-        var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+        var assembly = Assembly.GetExecutingAssembly();
         var version = assembly
-            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion
             ?? assembly.GetName().Version?.ToString()
             ?? "unknown";
@@ -250,5 +250,38 @@ public class AdminController : ControllerBase
         if (plusIndex >= 0)
             version = version[..plusIndex];
         return Ok(new { version });
+    }
+
+    /// <summary>
+    /// 增加一个 Ollama 的专用 API 接口，
+    /// 骗过 vs2026 18.9.0+ 的 Copilot
+    /// </summary>
+    /// <returns></returns>
+    [HttpGet("tags")]
+    public IActionResult GetTags()
+    {
+        var response = new
+        {
+            models = new[]
+            {
+                new
+                {
+                    name = "ollama",
+                    model = "gemma4",
+                    modified_at = "2025-10-03T23:34:03.409490317-07:00",
+                    size = 9608350245L,
+                    digest = "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+                    details = new
+                    {
+                        format = "custom",
+                        family = "auto-copilot",
+                        families = new[] { "auto-copilot" },
+                        parameter_size = "BYOK",
+                        quantization_level = "Q4_K_M"
+                    }
+                }
+            }
+        };
+        return Ok(response);
     }
 }
