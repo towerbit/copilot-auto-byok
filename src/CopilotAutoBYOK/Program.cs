@@ -63,6 +63,8 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 builder.Services.AddSingleton<IConfigService, ConfigService>();
 builder.Services.AddSingleton<IMetricsService, MetricsService>();
 builder.Services.AddHostedService<MetricsService>();
+builder.Services.AddSingleton<LogCleanupService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<LogCleanupService>());
 builder.Services.AddScoped<IProxyService, ProxyService>();
 // 监听0.0.0.0
 builder.WebHost.ConfigureKestrel(options =>

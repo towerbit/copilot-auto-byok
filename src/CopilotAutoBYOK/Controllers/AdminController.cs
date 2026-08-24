@@ -17,10 +17,12 @@ public class FetchModelsRequest
 public class AdminController : ControllerBase
 {
     private readonly IConfigService _configService;
+    private readonly LogCleanupService _logCleanupService;
 
-    public AdminController(IConfigService configService)
+    public AdminController(IConfigService configService, LogCleanupService logCleanupService)
     {
         _configService = configService;
+        _logCleanupService = logCleanupService;
     }
 
     [HttpGet("config")]
@@ -283,5 +285,19 @@ public class AdminController : ControllerBase
             }
         };
         return Ok(response);
+    }
+
+    [HttpPost("logs/cleanup")]
+    public async Task<IActionResult> CleanupLogs()
+    {
+        var deleted = await _logCleanupService.CleanupAsync();
+        return Ok(new { deleted, message = $"已清理 {deleted} 条过期日志记录" });
+    }
+
+    [HttpPost("db/vacuum")]
+    public async Task<IActionResult> VacuumDatabase()
+    {
+        var freed = await _logCleanupService.VacuumAsync();
+        return Ok(new { freedBytes = freed, message = $"数据库压缩完成，释放 {freed / 1024} KB" });
     }
 }
