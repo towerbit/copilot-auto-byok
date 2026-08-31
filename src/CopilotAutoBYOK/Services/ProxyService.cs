@@ -20,6 +20,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace copilot_auto_byok.Services;
 
@@ -121,6 +122,17 @@ internal class BooleanConvertStream : Stream
         }
 
         base.Dispose(disposing);
+    }
+
+    // 向下传播异步释放：内层可能是 MetricsCollectingStream，它需要 await DisposeAsync 落库。
+    public override async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        await _inner.DisposeAsync().ConfigureAwait(false);
+
+        base.Dispose(true);
     }
 
     /// <summary>
@@ -286,6 +298,7 @@ internal class ReasoningContentStripStream : Stream
 {
     private readonly Stream _inner;
     private readonly StringBuilder _buffer = new();
+    private bool _disposed;
 
     public ReasoningContentStripStream(Stream inner) { _inner = inner; }
 
@@ -298,6 +311,32 @@ internal class ReasoningContentStripStream : Stream
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     public override void SetLength(long value) => throw new NotSupportedException();
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    // 必须向下传递 Dispose：内层是 MetricsCollectingStream，
+    // 它依赖 Dispose 触发指标落库。缺失本重写会导致流式请求的日志永远写不进 request_metrics。
+    protected override void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (disposing)
+        {
+            _inner.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    // 与 Dispose 同理，异步路径必须传播，否则 DisposeAsync 到这里就断了。
+    public override async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        await _inner.DisposeAsync().ConfigureAwait(false);
+
+        base.Dispose(true);
+    }
 
     public override int Read(byte[] buffer, int offset, int count)
     {
@@ -515,6 +554,73 @@ internal class MetricsCollectingStream : Stream
         return read;
     }
 
+    /// <summary>
+    /// 停止计时、解析用量并填充到 _metrics，返回响应正文（供日志使用）。解析失败降级，不抛出。
+    /// </summary>
+    private string ParseAndFillMetrics()
+    {
+        // 停止计时：流式分支把流交给调用方时并未 Stop，这里拿到的才是
+        // 响应体读完的真实耗时；否则 TotalDurationMs 会被冻结成 LatencyMs。
+        _stopwatch.Stop();
+
+        string contentText;
+        try
+        {
+            _copy.Position = 0;
+            contentText = Encoding.UTF8.GetString(_copy.ToArray());
+
+            if (_protocol == "openai")
+                ParseOpenAIStreamingUsage(contentText, _metrics);
+            else
+                ParseAnthropicStreamingUsage(contentText, _metrics);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse streaming usage");
+            contentText = string.Empty;
+        }
+
+        _metrics.TotalDurationMs = _stopwatch.ElapsedMilliseconds;
+        _metrics.IsSuccess = _isSuccess;
+        _metrics.EstimatedCost = CalculateCostStatic(_metrics);
+        _metrics.TokensPerSecond = _metrics.TotalDurationMs > 0 && _metrics.CompletionTokens > 0
+            ? Math.Round(_metrics.CompletionTokens / (_metrics.TotalDurationMs / 1000.0), 2)
+            : 0;
+
+        return contentText;
+    }
+
+    /// <summary>
+    /// 异步释放：解析用量后 await 落库。这是流式请求写入 request_metrics 的正式路径，
+    /// 调用方必须 await DisposeAsync，否则无法 await RecordAsync。
+    /// </summary>
+    public override async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        try
+        {
+            var contentText = ParseAndFillMetrics();
+
+            await _metricsService.RecordAsync(_metrics).ConfigureAwait(false);
+
+            _logger.LogDebug("Streaming metrics recorded: prompt={Prompt}, completion={Completion}, total={Total}ms, contentLength={ContentLength}",
+                _metrics.PromptTokens, _metrics.CompletionTokens, _metrics.TotalDurationMs, contentText.Length);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to record streaming metrics");
+        }
+
+        _copy.Dispose();
+        try { await _inner.DisposeAsync().ConfigureAwait(false); } catch { }
+    }
+
+    /// <summary>
+    /// 同步释放（兜底路径，正常应走 DisposeAsync）。
+    /// 此处无法 await，只能同步等待投递完成，否则日志会丢失。
+    /// </summary>
     protected override void Dispose(bool disposing)
     {
         if (_disposed) return;
@@ -524,28 +630,16 @@ internal class MetricsCollectingStream : Stream
         {
             try
             {
-                _copy.Position = 0;
-                var contentText = Encoding.UTF8.GetString(_copy.ToArray());
+                var contentText = ParseAndFillMetrics();
 
-                if (_protocol == "openai")
-                    ParseOpenAIStreamingUsage(contentText, _metrics);
-                else
-                    ParseAnthropicStreamingUsage(contentText, _metrics);
+                _metricsService.RecordAsync(_metrics).GetAwaiter().GetResult();
 
-                _metrics.TotalDurationMs = _stopwatch.ElapsedMilliseconds;
-                _metrics.IsSuccess = _isSuccess;
-                _metrics.EstimatedCost = CalculateCostStatic(_metrics);
-                _metrics.TokensPerSecond = _metrics.TotalDurationMs > 0 && _metrics.CompletionTokens > 0
-                    ? Math.Round(_metrics.CompletionTokens / (_metrics.TotalDurationMs / 1000.0), 2)
-                    : 0;
-
-                _metricsService.RecordAsync(_metrics).ConfigureAwait(false);
-                _logger.LogInformation("Streaming metrics recorded: prompt={Prompt}, completion={Completion}, total={Total}ms, contentLength={ContentLength}",
+                _logger.LogDebug("Streaming metrics recorded (sync dispose): prompt={Prompt}, completion={Completion}, total={Total}ms, contentLength={ContentLength}",
                     _metrics.PromptTokens, _metrics.CompletionTokens, _metrics.TotalDurationMs, contentText.Length);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to parse streaming usage");
+                _logger.LogWarning(ex, "Failed to record streaming metrics");
             }
 
             _copy.Dispose();
@@ -777,6 +871,9 @@ public class ProxyService : IProxyService
         };
 
         var stopwatch = Stopwatch.StartNew();
+        // 流式并且已把响应流交给调用方时为 true：此时指标改由 MetricsCollectingStream
+        // 在 DisposeAsync 时落库，ForwardAsync 不再 Stop 计时、也不再记录。
+        var streamHandoff = false;
 
         try
         {
@@ -884,14 +981,14 @@ public class ProxyService : IProxyService
                     var originalHeaders = response.Content.Headers.ToList();
                     response.Content = new StreamContent(booleanConvertStream);
                     foreach (var header in originalHeaders)
-                    {
                         response.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
-                    }
+                    // 指标改由 MetricsCollectingStream 在 DisposeAsync 时落库
+                    streamHandoff = true;
                     return response;
                 }
                 else
 #endif
-                {
+                    {
                     // Wrap with BooleanConvertStream to convert Python-style booleans to JSON-style
                     var booleanConvertStream = new BooleanConvertStream(teeStream);
 
@@ -902,6 +999,8 @@ public class ProxyService : IProxyService
                     {
                         response.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
                     }
+                    // 指标改由 MetricsCollectingStream 在 DisposeAsync 时落库
+                    streamHandoff = true;
                     return response;
                 }
             }
@@ -941,12 +1040,17 @@ public class ProxyService : IProxyService
         }
         finally
         {
-            stopwatch.Stop();
-            if (metrics.TotalDurationMs == 0)
-                metrics.TotalDurationMs = stopwatch.ElapsedMilliseconds;
-            // For streaming, metrics are recorded when MetricsCollectingStream is disposed
-            if (!isStreaming)
+            if (!streamHandoff)
+            {
+                // 非流式，或流式但尚未把流交给调用方就出错：在此停止计时并记录。
+                // 修正了原先「流式请求在建流前抛异常则日志彻底丢失」的问题。
+                stopwatch.Stop();
+                if (metrics.TotalDurationMs == 0)
+                    metrics.TotalDurationMs = stopwatch.ElapsedMilliseconds;
                 await _metricsService.RecordAsync(metrics);
+            }
+            // streamHandoff == true 时故意不 Stop：计时持续到响应体读完，
+            // 由 MetricsCollectingStream.ParseAndFillMetrics 停止并落库。
         }
     }
 

@@ -61,16 +61,20 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 
 // Register services
 builder.Services.AddSingleton<IConfigService, ConfigService>();
-builder.Services.AddSingleton<IMetricsService, MetricsService>();
-builder.Services.AddHostedService<MetricsService>();
+// 必须复用同一个实例：AddHostedService<MetricsService>() 会另外创建一个实例，
+// 导致 IMetricsService 写入的 channel 与 IHostedService 消费的 channel 不是同一个。
+builder.Services.AddSingleton<MetricsService>();
+builder.Services.AddSingleton<IMetricsService>(sp => sp.GetRequiredService<MetricsService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MetricsService>());
 builder.Services.AddSingleton<LogCleanupService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<LogCleanupService>());
 builder.Services.AddScoped<IProxyService, ProxyService>();
-// 监听0.0.0.0
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenAnyIP(15959); // Listen on port 15959
-});
+// 以下代码通过 appsettings.json 配置 "Urls"："http://*:15959" 实现
+// // 监听0.0.0.0
+// builder.WebHost.ConfigureKestrel(options =>
+// {
+//     options.ListenAnyIP(15959); // Listen on port 15959
+// });
 
 var app = builder.Build();
 

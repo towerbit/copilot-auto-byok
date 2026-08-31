@@ -48,36 +48,30 @@ public class MetricsService : IMetricsService, IHostedService, IDisposable
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                // Try to read from channel without blocking
-                // Use TryRead first to avoid exceptions entirely
-                bool hasData = false;
+                var waitTask = _metricsChannel.Reader.WaitToReadAsync(cancellationToken).AsTask();
+                bool hasMore;
 
-                // TryRead returns false if channel is empty or completed
+                if (batch.Count == 0)
+                {
+                    // No pending batch: wait for data. If the channel is completed
+                    // and drained, WaitToReadAsync returns false and we do a final flush.
+                    hasMore = await waitTask.ConfigureAwait(false);
+                    if (!hasMore) break;
+                }
+                else
+                {
+                    // Pending batch: also wake up periodically so the flush interval
+                    // is honoured. Without the delay the loop would spin at 100% CPU
+                    // because WaitToReadAsync completes synchronously on an empty read.
+                    var delayTask = Task.Delay(500, CancellationToken.None);
+                    var completed = await Task.WhenAny(waitTask, delayTask).ConfigureAwait(false);
+                    hasMore = completed == waitTask && await waitTask.ConfigureAwait(false);
+                    if (!hasMore && completed == waitTask) break;
+                }
+
                 while (_metricsChannel.Reader.TryRead(out var metrics))
                 {
                     batch.Add(metrics);
-                    hasData = true;
-                }
-
-                // If no data available, wait briefly before checking again
-                if (!hasData && batch.Count == 0)
-                {
-                    // Wait for data with a timeout, but use a non-exception approach
-                    var delayTask = Task.Delay(500, CancellationToken.None);
-                    var waitTask = _metricsChannel.Reader.WaitToReadAsync(cancellationToken).AsTask();
-
-                    // Wait for either data or timeout
-                    var completedTask = await Task.WhenAny(waitTask, delayTask);
-
-                    if (completedTask == waitTask && waitTask.Result)
-                    {
-                        // Data is available, read it
-                        while (_metricsChannel.Reader.TryRead(out var newMetrics))
-                        {
-                            batch.Add(newMetrics);
-                        }
-                    }
-                    // If timeout or cancellation, just continue the loop
                 }
 
                 // Flush batch

@@ -95,15 +95,27 @@ public class AnthropicController : ControllerBase
             // For streaming (SSE), copy the stream directly without buffering
             Response.Headers.Remove("Content-Length");
             var stream = await response.Content.ReadAsStreamAsync();
-            var buffer = new byte[8192];
-            int read;
-            while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            try
             {
-                await Response.Body.WriteAsync(buffer, 0, read);
-                await Response.Body.FlushAsync();
+                var buffer = new byte[8192];
+                int read;
+                while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    await Response.Body.WriteAsync(buffer, 0, read);
+                    await Response.Body.FlushAsync();
+                }
             }
-            // Dispose the content to trigger MetricsCollectingStream.Dispose
-            response.Content.Dispose();
+            finally
+            {
+                // 必须对 stream 调用 DisposeAsync：
+                // HttpContent.DisposeAsync() 的基类实现只同步调用 Dispose(true)，
+                // 不会把 DisposeAsync 传播到内层流，MetricsCollectingStream 就拿不到 await 的机会。
+                try { await stream.DisposeAsync(); }
+                catch (Exception ex)
+                { _logger.LogWarning(ex, "Stream disposal failed (metrics may be lost)"); }
+                // 兜底清理，此时内层流已被 _disposed 标记为已释放，为空操作
+                response.Content.Dispose();
+            }
         }
         catch (Exception ex)
         {
