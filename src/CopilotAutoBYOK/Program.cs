@@ -7,14 +7,7 @@ using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Net;
 using System.Text.Json.Nodes;
-#if DEBUG
-// Run boolean conversion tests if --test flag is passed
-if (args.Contains("--test"))
-{
-    copilot_auto_byok.TestBooleanConversion.RunTests();
-    return;
-}
-#endif
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services
