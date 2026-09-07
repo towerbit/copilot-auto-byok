@@ -368,8 +368,9 @@ function getSelectedModels(dialog) {
     if (checkboxes.length > 0) {
         return Array.from(checkboxes).map(cb => cb.value);
     }
-    const manualInput = dialog.querySelector('.providerModels');
-    return manualInput.value.split(',').map(s => s.trim()).filter(Boolean);
+    return [];// 当所有模型都不勾选时，返回空数组（而不是所有模型）
+    //const manualInput = dialog.querySelector('.providerModels');
+    //return manualInput.value.split(',').map(s => s.trim()).filter(Boolean);
 }
 
 function getAllModels(dialog) {
