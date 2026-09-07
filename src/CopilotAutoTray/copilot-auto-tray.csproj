@@ -1,0 +1,64 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<RootNamespace>copilot_auto_tray</RootNamespace>
+		<ApplicationIcon>copilot-auto-tray.ico</ApplicationIcon>
+		<AssemblyName>copilot-auto-tray</AssemblyName>
+		<StartupObject>copilot_auto_tray.Program</StartupObject>
+		<UseWindowsForms>true</UseWindowsForms>
+		<Version>1.0.0.0</Version>
+		<!-- 多目标框架: net8.0-windows, net10.0-windows, net462 -->
+		<TargetFrameworks>net8.0-windows;net10.0-windows;net462</TargetFrameworks>
+		<LangVersion>latest</LangVersion>
+
+		<!-- 禁用 SDK 自动生成 AssemblyInfo -->
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+
+		<!-- 抑制平台兼容性警告和 nullable 警告，保持原有代码风格 -->
+		<NoWarn>$(NoWarn);CA1416;CS8618;CS8602;CS8604;CS8601;CS8603</NoWarn>
+	</PropertyGroup>
+
+	<!-- net462 特定的设置 -->
+	<PropertyGroup Condition="'$(TargetFramework)' == 'net462'">
+		<LangVersion>7.3</LangVersion>
+	</PropertyGroup>
+
+	<!-- .NET Framework 4.6.2 特定的引用和设置 -->
+	<ItemGroup Condition="'$(TargetFramework)' == 'net462'">
+		<Reference Include="System" />
+		<Reference Include="System.Core" />
+		<Reference Include="System.Drawing" />
+		<Reference Include="System.Windows.Forms" />
+		<Reference Include="System.Configuration" />
+		<Reference Include="Microsoft.CSharp" />
+	</ItemGroup>
+
+	<!-- .NET 8.0/10.0 启用 nullable 和 implicit usings -->
+	<PropertyGroup Condition="'$(TargetFramework)' != 'net462'">
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+	<ItemGroup>
+	  <None Remove="copilot-auto-tray.ico" />
+	</ItemGroup>
+	<ItemGroup>
+	  <EmbeddedResource Include="copilot-auto-tray.ico" />
+	</ItemGroup>
+	
+	<ItemGroup>
+		<Compile Update="Properties\Settings.Designer.cs">
+			<AutoGen>True</AutoGen>
+			<DesignTimeSharedInput>True</DesignTimeSharedInput>
+			<DependentUpon>Settings.settings</DependentUpon>
+		</Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="Properties\Settings.settings">
+			<Generator>SettingsSingleFileGenerator</Generator>
+			<LastGenOutput>Settings.Designer.cs</LastGenOutput>
+		</None>
+	</ItemGroup>
+
+</Project>
