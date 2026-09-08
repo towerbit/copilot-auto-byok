@@ -61,7 +61,8 @@ async function updateBindingDisplay() {
         const hasAnyBinding = !!(binding.openAICurrentModel || binding.anthropicCurrentModel);
 
         if (el) {
-            el.textContent = `OpenAI: ${openAISummary} | Anthropic: ${anthropicSummary}`;
+            //el.textContent = `OpenAI: ${openAISummary} <br/> Anthropic: ${anthropicSummary}`;
+            el.innerHTML = `OpenAI: ${openAISummary} <br/> Anthropic: ${anthropicSummary}`;
         }
         if (dot) {
             dot.classList.toggle('active', hasAnyBinding);
