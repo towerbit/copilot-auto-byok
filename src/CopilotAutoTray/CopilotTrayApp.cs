@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Management;
 using System.Reflection;
 using System.Threading;
 using System.Windows.Forms;
@@ -14,13 +15,11 @@ namespace copilot_auto_tray
     {
         private readonly string _appTitle = GetAppTitle();
         private NotifyIcon _notifyIcon;
-#pragma warning disable CS8618 // 可空引用类型
-        private Process _cmdProcess;
-#pragma warning restore CS8618
 
         public CopilotTrayApp()
         {
             InitializeComponent();
+            StopCmd();
             StartCmd();
             OpenBrowser();
         }
@@ -69,8 +68,6 @@ namespace copilot_auto_tray
             };
 
             _notifyIcon.DoubleClick += (s, e) => OpenBrowser();
-            _notifyIcon.ShowBalloonTip(3000, "",
-                "Copilot Auto BYOK 服务已启动", ToolTipIcon.Info);
         }
 
         private void ShowAbout()
@@ -171,7 +168,9 @@ namespace copilot_auto_tray
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden
                 };
-                _cmdProcess = Process.Start(psi);
+                Process.Start(psi);
+                _notifyIcon.ShowBalloonTip(3000, "",
+                    "Copilot Auto BYOK 服务已启动", ToolTipIcon.Info);
             }
             catch (Win32Exception ex)
             {
@@ -184,24 +183,15 @@ namespace copilot_auto_tray
         {
             try
             {
-                if (_cmdProcess != null && !_cmdProcess.HasExited)
+                // 尝试通过进程名称查找并终止
+                var processName = Path.GetFileNameWithoutExtension(CmdFilePath);
+                foreach(var process in Process.GetProcessesByName(processName))
                 {
-                    _cmdProcess.Kill();
-                    _cmdProcess.WaitForExit(3000);
-                    Debug.Print($"DEBUG: 进程 {_cmdProcess.ProcessName} 已被终止");
-                }
-                else
-                {
-                    // 如果 _cmdProcess 为 null 或已退出，尝试通过进程名称查找并终止
-                    var processName = Path.GetFileNameWithoutExtension(CmdFilePath);
-                    foreach(var process in Process.GetProcessesByName(processName))
+                    if (process.MainModule.FileName == CmdFilePath)
                     {
-                        if (process.MainModule.FileName == CmdFilePath)
-                        {
-                            process.Kill();
-                            process.WaitForExit(3000);
-                            Debug.Print($"DEBUG: 进程 {process.ProcessName} 已被终止");
-                        }
+                        process.Kill();
+                        process.WaitForExit(3000);
+                        Debug.Print($"DEBUG: {process.ProcessName} 进程 {process.Id} 已被终止");
                     }
                 }
             }
@@ -261,6 +251,15 @@ namespace copilot_auto_tray
             return null;
         }
 
+        private const string APP_ID = "copilot-auto-byok";
+        /// <summary>
+        /// 单独的 Edge 用户数据目录，用于存储 PWA 的配置和状态，
+        /// 主要用于查找和关闭窗口，避免影响其他的 Edge 浏览器实例
+        /// </summary>
+        private readonly static string PROFILE_PATH = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            $"{Application.ProductName}\\Profile");
+
         internal static void OpenBrowser()
         {
             var appUrl = Properties.Settings.Default.urls;
@@ -271,7 +270,7 @@ namespace copilot_auto_tray
                 try
                 {
                     // Edge PWA 模式参数                  
-                    var args = $"--app={appUrl} --app-id=copilot-auto-byok";
+                    var args = $"--app={appUrl} --app-id={APP_ID} --user-data-dir=\"{PROFILE_PATH}\"";
                     var psi = new ProcessStartInfo
                     {
                         FileName = edgePath,
@@ -292,6 +291,46 @@ namespace copilot_auto_tray
             catch { }
         }
 
+        /// <summary>
+        /// 关闭 Edge PWA 窗口
+        /// </summary>
+        private void CloseBrowser()
+        {
+            try
+            {
+                var searcher = new ManagementObjectSearcher(
+                    "SELECT ProcessId,CommandLine FROM Win32_Process WHERE Name='msedge.exe'");
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    var cmd = obj["CommandLine"] as string ?? string.Empty;
+                    Debug.Print(cmd);
+                    if (cmd.Contains($"--app-id={APP_ID}") &&
+                        cmd.Contains($"--user-data-dir=\"{PROFILE_PATH}\""))
+                    {
+                        if (int.TryParse(obj["ProcessId"]?.ToString(), out int pid))
+                        {
+                            try
+                            {
+                                var p = Process.GetProcessById(pid);
+                                if (!p.HasExited)
+                                    p.Kill();
+                            }
+                            catch
+                            {
+                                /* 忽略已退出或无权限 */
+                                Debug.Print($"WARN : CloseBrowser 无法终止进程 {pid}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                /* WMI 不可用时就没办法了，忽略 */
+                Debug.Print("WARN : CloseBrowser WMI 查询失败");
+            }
+        }
+
         private void RestartCmd()
         {
             StopCmd();
@@ -303,6 +342,7 @@ namespace copilot_auto_tray
         private void ExitApp()
         {
             StopCmd();
+            CloseBrowser();
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
             Application.Exit();
