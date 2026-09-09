@@ -618,7 +618,8 @@ function updateAutoCopilotBindingSummary() {
     const hasAnyBinding = !!(autocopilot?.openAICurrentModel || autocopilot?.anthropicCurrentModel);
 
     if (bindingEl) {
-        bindingEl.textContent = `OpenAI: ${openAISummary} | Anthropic: ${anthropicSummary}`;
+        //bindingEl.textContent = `OpenAI: ${openAISummary} | Anthropic: ${anthropicSummary}`;
+        bindingEl.innerHTML = `<b>OpenAI:</b> ${openAISummary} <br/><b>Anthropic:</b> ${anthropicSummary}`;
     }
     if (dot) {
         dot.classList.toggle('active', hasAnyBinding);

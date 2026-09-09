@@ -96,7 +96,7 @@
                         <div class="connection-item">
                             <div class="connection-label">OpenAI 代理地址</div>
                             <div class="connection-value">
-                                <code id="openaiUrl">http://localhost:5267/v1</code>
+                                <code id="openaiUrl">http://localhost:15959/v1</code>
                                 <button onclick="copyToClipboard('openaiUrl')" class="btn-icon" title="复制">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <rect x="9" y="9" width="13" height="13" rx="2" />
@@ -108,7 +108,7 @@
                         <div class="connection-item">
                             <div class="connection-label">Anthropic 代理地址</div>
                             <div class="connection-value">
-                                <code id="anthropicUrl">http://localhost:5267/v1</code>
+                                <code id="anthropicUrl">http://localhost:15959/v1</code>
                                 <button onclick="copyToClipboard('anthropicUrl')" class="btn-icon" title="复制">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <rect x="9" y="9" width="13" height="13" rx="2" />
@@ -195,7 +195,7 @@
                                     COPILOT_PROVIDER_BASE_URL
                                     <span class="byok-badge required">必需</span>
                                 </label>
-                                <input type="text" id="byok-providerBaseUrl" name="providerBaseUrl" value="http://localhost:5267/v1" placeholder="https://api.example.com/v1">
+                                <input type="text" id="byok-providerBaseUrl" name="providerBaseUrl" value="http://localhost:15959/v1" placeholder="https://api.example.com/v1">
                                 <span class="byok-form-hint">API endpoint URL，激活 BYOK 模式</span>
                             </div>
                             <div class="byok-form-group">
@@ -402,7 +402,7 @@
                             <button class="code-tab" data-lang="anthropic">Anthropic 协议</button>
                         </div>
                         <div class="code-panel" id="code-openai">
-                            <pre><code>curl http://localhost:5267/v1/chat/completions \
+                            <pre><code>curl http://localhost:15959/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -411,7 +411,7 @@
   }'</code></pre>
                         </div>
                         <div class="code-panel" id="code-anthropic" style="display:none;">
-                            <pre><code>curl http://localhost:5267/v1/messages \
+                            <pre><code>curl http://localhost:15959/v1/messages \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
