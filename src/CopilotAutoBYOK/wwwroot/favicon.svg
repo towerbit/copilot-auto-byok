@@ -1,0 +1,9 @@
+<svg width="24" height="24" xmlns="http://www.w3.org/2000/svg" stroke-linejoin="round" stroke-linecap="round" stroke-width="2" stroke="currentColor" fill="none">
+ <g>
+  <title>Layer 1</title>
+  <path id="svg_1" d="m12,2l-10,5l10,5l10,-5l-10,-5z"/>
+  <path id="svg_2" d="m2,17l10,5l10,-5"/>
+  <path id="svg_3" d="m2,12l10,5l10,-5"/>
+ </g>
+
+</svg>

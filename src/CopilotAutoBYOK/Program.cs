@@ -217,8 +217,13 @@ internal sealed class HeaderParameterOperationFilter : IOperationFilter
             !operation.RequestBody.Content.TryGetValue("application/json", out var mediaType))
             return;
 
-        mediaType.Schema = new OpenApiSchema { Type = JsonSchemaType.Object };
-        mediaType.Example = JsonNode.Parse(json);
+        // Microsoft.OpenApi 3.x 中 IOpenApiMediaType 接口的 Schema/Example 是只读的，
+        // 但具体实现类 OpenApiMediaType 的属性是可写的，转换为具体类型即可赋值。
+        if (mediaType is OpenApiMediaType concreteMediaType)
+        {
+            concreteMediaType.Schema = new OpenApiSchema { Type = JsonSchemaType.Object };
+            concreteMediaType.Example = JsonNode.Parse(json);
+        }
     }
 
     private static void AddHeaderParameter(OpenApiOperation operation, string name, string description)
