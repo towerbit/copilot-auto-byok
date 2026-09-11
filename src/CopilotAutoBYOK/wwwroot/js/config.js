@@ -238,25 +238,29 @@ function showAddProviderDialog() {
                     </div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group" style="flex:2">
+                    <div class="form-group">
                         <label>API 密钥 <span class="required">*</span></label>
                         <div class="input-with-icon">
                             <input type="password" class="providerApiKey" placeholder="sk-...">
-                            <button type="button" class="btn-icon" onclick="togglePasswordVisibility(this)" title="显示/隐藏">
+                            <button type="button" class="btn-icon" onclick="toggleKeyVisibility(this)" title="显示/隐藏">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                                 </svg>
                             </button>
                         </div>
                     </div>
-                    <div class="form-group" style="flex:1">
+                    <div class="form-group">
                         <label>&nbsp;</label>
-                        <button class="btn btn-secondary" onclick="fetchModelsFromProvider(this)" style="width:100%">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px">
-                                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                            </svg>
-                            获取模型列表
-                        </button>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <button class="btn btn-secondary" onclick="fetchModelsFromProvider(this)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px">
+                                    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                                </svg>
+                                获取模型列表
+                            </button>
+                            <input type="checkbox" id="freeonly" style="margin-left:8px" checked>
+                            <label for="freeonly">仅添加免费模型</label>
+                        </div>
                     </div>
                 </div>
                 <div class="form-group">
@@ -294,6 +298,7 @@ async function fetchModelsFromProvider(btn) {
     const dialog = btn.closest('.dialog');
     const baseUrl = dialog.querySelector('.providerBaseUrl').value.trim();
     const apiKey = dialog.querySelector('.providerApiKey').value.trim();
+    const freeOnly = dialog.querySelector('#freeonly').checked;
 
     if (!baseUrl || !apiKey) {
         showToast('请填写基础 URL 和 API 密钥', 'error');
@@ -311,6 +316,12 @@ async function fetchModelsFromProvider(btn) {
         });
 
         const data = await res.json();
+        if (freeOnly && data.models) {
+            // 根据返回的模型列表进行过滤，只保留模型id中包含":free"的免费模型
+            data.models = data.models.filter(m => m.endsWith(':free') ||
+                                                  m.endsWith('/free'));
+        }
+
         const container = dialog.querySelector('#fetchedModelsContainer');
         const list = dialog.querySelector('#fetchedModelsList');
         const modelsInput = dialog.querySelector('.providerModels');
@@ -470,25 +481,29 @@ function editProvider(id) {
                     </div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group" style="flex:2">
+                    <div class="form-group">
                         <label>API 密钥（留空则不修改）</label>
                         <div class="input-with-icon">
                             <input type="password" class="providerApiKey" value="${escapeHtml(p.apiKey)}" placeholder="留空保持不变">
-                            <button type="button" class="btn-icon" onclick="togglePasswordVisibility(this)" title="显示/隐藏">
+                            <button type="button" class="btn-icon" onclick="toggleKeyVisibility(this)" title="显示/隐藏">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                                 </svg>
                             </button>
                         </div>
                     </div>
-                    <div class="form-group" style="flex:1">
+                    <div class="form-group">
                         <label>&nbsp;</label>
-                        <button class="btn btn-secondary" onclick="fetchModelsFromProvider(this)" style="width:100%">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px">
-                                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                            </svg>
-                            重新获取模型
-                        </button>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <button class="btn btn-secondary" onclick="fetchModelsFromProvider(this)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px">
+                                    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                                </svg>
+                                重新获取模型
+                            </button>
+                            <input type="checkbox" id="freeonly" style="margin-left:8px" checked>
+                            <label for="freeonly">仅添加免费模型</label>
+                        </div>
                     </div>
                 </div>
                 <div class="form-group">
