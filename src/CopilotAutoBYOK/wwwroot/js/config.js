@@ -258,8 +258,8 @@ function showAddProviderDialog() {
                                 </svg>
                                 获取模型列表
                             </button>
-                            <input type="checkbox" id="freeonly" style="margin-left:8px" checked>
-                            <label for="freeonly">仅添加免费模型</label>
+                            <input type="checkbox" id="freeonly" style="margin-left:8px">
+                            <label for="freeonly" title="适用于 kilocode/openrouter 等">仅添加免费模型</label>
                         </div>
                     </div>
                 </div>
@@ -312,16 +312,10 @@ async function fetchModelsFromProvider(btn) {
         const res = await fetch(`${API_BASE}/providers/fetch-models`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ baseUrl, apiKey })
+            body: JSON.stringify({ baseUrl, apiKey, freeOnly})
         });
 
         const data = await res.json();
-        if (freeOnly && data.models) {
-            // 根据返回的模型列表进行过滤，只保留模型id中包含":free"的免费模型
-            data.models = data.models.filter(m => m.endsWith(':free') ||
-                                                  m.endsWith('/free'));
-        }
-
         const container = dialog.querySelector('#fetchedModelsContainer');
         const list = dialog.querySelector('#fetchedModelsList');
         const modelsInput = dialog.querySelector('.providerModels');
@@ -501,8 +495,8 @@ function editProvider(id) {
                                 </svg>
                                 重新获取模型
                             </button>
-                            <input type="checkbox" id="freeonly" style="margin-left:8px" checked>
-                            <label for="freeonly">仅添加免费模型</label>
+                            <input type="checkbox" id="freeonly" style="margin-left:8px">
+                            <label for="freeonly" title="适用于 kilocode/openrouter 等">仅添加免费模型</label>
                         </div>
                     </div>
                 </div>

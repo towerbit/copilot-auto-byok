@@ -3,6 +3,8 @@ using copilot_auto_byok.Services;
 using copilot_auto_byok.Models;
 using System;
 using System.Reflection;
+using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace copilot_auto_byok.Controllers;
 
@@ -10,6 +12,7 @@ public class FetchModelsRequest
 {
     public string BaseUrl { get; set; } = "";
     public string ApiKey { get; set; } = "";
+    public bool FreeOnly { get; set; } = false;
 }
 
 [ApiController]
@@ -130,34 +133,35 @@ public class AdminController : ControllerBase
             }
 
             var content = await response.Content.ReadAsStringAsync();
-            using var doc = System.Text.Json.JsonDocument.Parse(content);
-
+            using var doc = JsonDocument.Parse(content);
             var models = new List<string>();
             if (doc.RootElement.TryGetProperty("data", out var dataArray) && dataArray.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
                 foreach (var item in dataArray.EnumerateArray())
                 {
                     if (item.TryGetProperty("id", out var idProp))
-                        models.Add(idProp.GetString() ?? "");
+                        addModel(request.FreeOnly, models, idProp.GetString() ?? "", item);
+
                 }
             }
-            else if (doc.RootElement.TryGetProperty("models", out var modelsArray) && modelsArray.ValueKind == System.Text.Json.JsonValueKind.Array)
+            else if (doc.RootElement.TryGetProperty("models", out var modelsArray) && 
+                     modelsArray.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in modelsArray.EnumerateArray())
                 {
                     if (item.TryGetProperty("id", out var idProp))
-                        models.Add(idProp.GetString() ?? "");
+                        addModel(request.FreeOnly, models, idProp.GetString() ?? "", item);
                 }
             }
-            else if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+            else if (doc.RootElement.ValueKind == JsonValueKind.Array)
             {
                 // Some providers return a plain array
                 foreach (var item in doc.RootElement.EnumerateArray())
                 {
                     if (item.TryGetProperty("id", out var idProp))
-                        models.Add(idProp.GetString() ?? "");
-                    else if (item.ValueKind == System.Text.Json.JsonValueKind.String)
-                        models.Add(item.GetString() ?? "");
+                        addModel(request.FreeOnly, models, idProp.GetString() ?? "", item);
+                    else if (item.ValueKind == JsonValueKind.String)
+                        addModel(request.FreeOnly, models, idProp.GetString() ?? "", item);
                 }
             }
 
@@ -181,7 +185,36 @@ public class AdminController : ControllerBase
                 error = $"获取模型列表失败: {ex.Message}，请手动输入模型名称。"
             });
         }
+
+        void addModel(bool freeOnly, List<string> models, string modelId, JsonElement element)
+        {
+            if (!freeOnly)
+                models.Add(modelId);
+            else if (isFree(element))
+                models.Add(modelId);
+        }
+
+        bool isFree(JsonElement element)
+        {
+            // 免费模型判定条件:
+            // 1. id 以 /free 或 :free 结尾
+            // 2. isFree 为 true
+            // 3. pricing:prompt 为 "0"
+            if (element.TryGetProperty("id", out var idProp) && 
+                (idProp.GetString()?.EndsWith("/free")==true || 
+                 idProp.GetString()?.EndsWith(":free")==true))
+                return true;
+            if (element.TryGetProperty("isFree", out var isFreeProp) && 
+                isFreeProp.GetBoolean())
+                return true;
+            if (element.TryGetProperty("pricing", out var pricingProp) && 
+                pricingProp.TryGetProperty("prompt", out var promptProp) && 
+                promptProp.GetString() == "0")
+                return true;
+            return false;
+        }
     }
+
 
     [HttpGet("autocopilot")]
     public IActionResult GetAutoCopilot()
